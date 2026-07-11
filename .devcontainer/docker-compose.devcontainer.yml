@@ -1,0 +1,11 @@
+# Devcontainer overlay — used only when VS Code attaches (see devcontainer.json).
+# Mounts the full repo at a separate path for editing. The running app keeps using
+# /app (built image + the selective bind mounts from docker-compose.yml), so edits to
+# profiles/, os/, workflows/, contracts/, workspace/ take effect live; ui/ source
+# changes still need a rebuild (`docker compose build engine`).
+# NOTE: relative paths here resolve against the BASE compose file's directory (the
+# repo root), because docker compose resolves all paths against the first -f file.
+services:
+  engine:
+    volumes:
+      - .:/workspaces/ai-marketing-engine

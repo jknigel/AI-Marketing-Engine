@@ -1,0 +1,52 @@
+{
+  "name": "Publish: Email Campaign",
+  "active": true,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "wh1", "name": "Webhook", "type": "n8n-nodes-base.webhook", "typeVersion": 1.1, "position": [0, 0],
+      "parameters": { "httpMethod": "POST", "path": "send-email-campaign", "responseMode": "onReceived" }
+    },
+    {
+      "id": "gate1", "name": "Approval Gate", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [220, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "combinator": "and",
+          "conditions": [
+            { "operator": { "type": "string", "operation": "equals" }, "leftValue": "={{ $json.body.secret }}", "rightValue": "={{ $env.ENGINE_WEBHOOK_SECRET }}" },
+            { "operator": { "type": "string", "operation": "equals" }, "leftValue": "={{ $json.body.calendar_item.status }}", "rightValue": "approved" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "send1", "name": "Send via Resend Broadcast (customize audience)", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [440, -80],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/broadcasts",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{ $env.RESEND_API_KEY }}" }] },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ name: $json.body.calendar_item.title, audience_id: 'REPLACE_WITH_AUDIENCE_ID', from: 'REPLACE_FROM_ADDRESS', subject: $json.body.calendar_item.title, text: 'Body is assembled from the artifact file by the email-lifecycle profile before approval.' }) }}"
+      },
+      "notes": "Set your Resend audience_id and from address once during setup. The approved email body lives at the calendar item's artifact path."
+    },
+    {
+      "id": "wb1", "name": "Write back: published", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [660, -80],
+      "parameters": {
+        "method": "POST",
+        "url": "http://engine:3000/api/calendar",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ secret: $env.ENGINE_WEBHOOK_SECRET, id: $('Webhook').item.json.body.calendar_item.id, status: 'published', published_at: $now.toISO() }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Approval Gate", "type": "main", "index": 0 }]] },
+    "Approval Gate": { "main": [[{ "node": "Send via Resend Broadcast (customize audience)", "type": "main", "index": 0 }], []] },
+    "Send via Resend Broadcast (customize audience)": { "main": [[{ "node": "Write back: published", "type": "main", "index": 0 }]] }
+  }
+}

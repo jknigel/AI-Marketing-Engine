@@ -1,0 +1,33 @@
+{
+  "name": "Social Listening Digest",
+  "active": true,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "cr1", "name": "Daily 17:00", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.1, "position": [0, 0],
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 17 * * *" }] } }
+    },
+    {
+      "id": "run1", "name": "Build digest", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [220, 0],
+      "parameters": {
+        "method": "POST", "url": "http://engine:3000/api/run", "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ secret: $env.ENGINE_WEBHOOK_SECRET, profile: 'social-organic', task: 'Run the daily engagement digest: sweep today\\'s brand mentions and replies across connected channels, dedupe, pick the ones worth responding to with suggested reply drafts (file publish-worthy replies as approval requests), and summarize the digest in your final message.' }) }}",
+        "options": { "timeout": 600000 }
+      }
+    },
+    {
+      "id": "slack1", "name": "Deliver digest", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [440, 0],
+      "parameters": {
+        "method": "POST", "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{ $env.SLACK_BOT_TOKEN }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: '#marketing', text: '👂 Daily social listening digest:\\n' + ($('Build digest').item.json.output || '').slice(-2500) }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Daily 17:00": { "main": [[{ "node": "Build digest", "type": "main", "index": 0 }]] },
+    "Build digest": { "main": [[{ "node": "Deliver digest", "type": "main", "index": 0 }]] }
+  }
+}

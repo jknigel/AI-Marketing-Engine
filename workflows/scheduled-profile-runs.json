@@ -1,0 +1,39 @@
+{
+  "name": "Scheduler: Profile Runs",
+  "active": true,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "cr1", "name": "Daily 06:00", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.1, "position": [0, -140],
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 6 * * *" }] } }
+    },
+    {
+      "id": "cr2", "name": "Weekly Mon 07:00", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.1, "position": [0, 0],
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 7 * * 1" }] } }
+    },
+    {
+      "id": "cr3", "name": "Monthly 1st 08:00", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.1, "position": [0, 140],
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 8 1 * *" }] } }
+    },
+    {
+      "id": "d1", "name": "Run daily profiles", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [260, -140],
+      "parameters": { "method": "POST", "url": "http://engine:3000/api/run-scheduled", "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ secret: $env.ENGINE_WEBHOOK_SECRET, cadence: 'daily' }) }}" }
+    },
+    {
+      "id": "w1", "name": "Run weekly profiles", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [260, 0],
+      "parameters": { "method": "POST", "url": "http://engine:3000/api/run-scheduled", "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ secret: $env.ENGINE_WEBHOOK_SECRET, cadence: 'weekly' }) }}" }
+    },
+    {
+      "id": "m1", "name": "Run monthly profiles", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [260, 140],
+      "parameters": { "method": "POST", "url": "http://engine:3000/api/run-scheduled", "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ secret: $env.ENGINE_WEBHOOK_SECRET, cadence: 'monthly' }) }}" }
+    }
+  ],
+  "connections": {
+    "Daily 06:00": { "main": [[{ "node": "Run daily profiles", "type": "main", "index": 0 }]] },
+    "Weekly Mon 07:00": { "main": [[{ "node": "Run weekly profiles", "type": "main", "index": 0 }]] },
+    "Monthly 1st 08:00": { "main": [[{ "node": "Run monthly profiles", "type": "main", "index": 0 }]] }
+  }
+}

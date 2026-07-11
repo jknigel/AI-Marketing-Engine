@@ -1,0 +1,50 @@
+{
+  "name": "Review Alert",
+  "active": true,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "wh1", "name": "Review Webhook", "type": "n8n-nodes-base.webhook", "typeVersion": 1.1, "position": [0, 0],
+      "parameters": { "httpMethod": "POST", "path": "review-alert", "responseMode": "onReceived" },
+      "notes": "Point your review platform integrations (Trustpilot webhook, G2, an RSS-watcher, etc.) at this endpoint with payload { rating, text, platform, url }."
+    },
+    {
+      "id": "if1", "name": "Negative?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [220, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "combinator": "and",
+          "conditions": [
+            { "operator": { "type": "number", "operation": "lte" }, "leftValue": "={{ Number($json.body.rating || 0) }}", "rightValue": 3 }
+          ]
+        }
+      }
+    },
+    {
+      "id": "run1", "name": "Wake reputation-manager", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [440, -80],
+      "parameters": {
+        "method": "POST", "url": "http://engine:3000/api/run", "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ secret: $env.ENGINE_WEBHOOK_SECRET, profile: 'reputation-manager', task: 'A negative review just arrived on ' + $json.body.platform + ' (rating ' + $json.body.rating + '): \"' + ($json.body.text || '').slice(0, 800) + '\" (' + ($json.body.url || '') + '). Draft a response per your playbook and file it in the approvals queue.' }) }}",
+        "options": { "timeout": 600000 }
+      }
+    },
+    {
+      "id": "slack1", "name": "Alert Slack", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [660, -80],
+      "parameters": {
+        "method": "POST", "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{ $env.SLACK_BOT_TOKEN }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: '#marketing', text: '⚠️ Negative review (' + $('Review Webhook').item.json.body.platform + ', ' + $('Review Webhook').item.json.body.rating + '★). Response draft is in the approvals queue.' }) }}"
+      }
+    },
+    {
+      "id": "log1", "name": "Log positive (no-op)", "type": "n8n-nodes-base.noOp", "typeVersion": 1, "position": [440, 120], "parameters": {}
+    }
+  ],
+  "connections": {
+    "Review Webhook": { "main": [[{ "node": "Negative?", "type": "main", "index": 0 }]] },
+    "Negative?": { "main": [[{ "node": "Wake reputation-manager", "type": "main", "index": 0 }], [{ "node": "Log positive (no-op)", "type": "main", "index": 0 }]] },
+    "Wake reputation-manager": { "main": [[{ "node": "Alert Slack", "type": "main", "index": 0 }]] }
+  }
+}

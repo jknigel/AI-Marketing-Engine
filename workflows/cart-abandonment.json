@@ -1,0 +1,44 @@
+{
+  "name": "Cart Abandonment",
+  "active": true,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "wh1", "name": "Cart Webhook", "type": "n8n-nodes-base.webhook", "typeVersion": 1.1, "position": [0, 0],
+      "parameters": { "httpMethod": "POST", "path": "cart-abandonment", "responseMode": "onReceived" },
+      "notes": "Point your Shopify 'checkout abandoned' webhook here. Payload must include { email, consent: true, cart_url, items }."
+    },
+    {
+      "id": "if1", "name": "Consent check", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [200, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "combinator": "and",
+          "conditions": [
+            { "operator": { "type": "boolean", "operation": "true" }, "leftValue": "={{ Boolean($json.body.consent) }}", "rightValue": "" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "wait1", "name": "Wait 1 hour", "type": "n8n-nodes-base.wait", "typeVersion": 1.1, "position": [400, -80],
+      "parameters": { "unit": "hours", "amount": 1 }
+    },
+    {
+      "id": "send1", "name": "Send recovery email (Resend)", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [600, -80],
+      "parameters": {
+        "method": "POST", "url": "https://api.resend.com/emails",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{ $env.RESEND_API_KEY }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ from: 'REPLACE_FROM_ADDRESS', to: [$('Cart Webhook').item.json.body.email], subject: 'You left something behind', html: '<p>Your cart is saved — <a href=\"' + $('Cart Webhook').item.json.body.cart_url + '\">pick up where you left off</a>.</p><p><small>Don\\'t want these emails? Unsubscribe via the link in the footer.</small></p>' }) }}"
+      },
+      "notes": "The email-lifecycle profile owns the template copy — update it there and mirror it here after approval."
+    }
+  ],
+  "connections": {
+    "Cart Webhook": { "main": [[{ "node": "Consent check", "type": "main", "index": 0 }]] },
+    "Consent check": { "main": [[{ "node": "Wait 1 hour", "type": "main", "index": 0 }], []] },
+    "Wait 1 hour": { "main": [[{ "node": "Send recovery email (Resend)", "type": "main", "index": 0 }]] }
+  }
+}

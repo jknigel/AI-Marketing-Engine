@@ -1,0 +1,57 @@
+name: ai-marketing-engine
+
+services:
+  engine:
+    build: .
+    ports:
+      - "${UI_PORT:-3000}:3000"
+    env_file: .env
+    environment:
+      - N8N_BASE_URL=http://n8n:5678
+    volumes:
+      - ./.env:/app/.env # wizard writes keys/secrets here — MUST live on the host
+      - ./workspace:/app/workspace # instance data survives rebuilds
+      - ./profiles:/app/profiles # editable without rebuild
+      - ./os:/app/os
+      - ./workflows:/app/workflows # n8n templates for first-boot import
+      - ./contracts:/app/contracts
+      - ./workspace/.opencode:/root/.local/share/opencode # opencode session state survives restarts
+    depends_on:
+      n8n:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "sh", "/app/docker/healthcheck.sh"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678" # n8n editor UI (inspect/tweak workflows)
+    env_file: .env # workflows read keys via $env expressions (single source of truth)
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-changeme}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-}
+      - GENERIC_TIMEZONE=${ENGINE_TIMEZONE:-UTC}
+      - N8N_DIAGNOSTICS_ENABLED=false
+    volumes:
+      - ./workspace/n8n:/home/node/.n8n # workflow DB + credentials persist
+    restart: unless-stopped
+
+  # Optional at scale: postgres for n8n + KPI ledger.
+  # Enable with: docker compose --profile scale up
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["scale"]
+    environment:
+      - POSTGRES_USER=engine
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-engine}
+      - POSTGRES_DB=engine
+    volumes:
+      - ./workspace/postgres:/var/lib/postgresql/data
+    restart: unless-stopped

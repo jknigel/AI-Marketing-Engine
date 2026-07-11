@@ -1,0 +1,63 @@
+{
+  "name": "Publish: Social Post",
+  "active": true,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "wh1", "name": "Webhook", "type": "n8n-nodes-base.webhook", "typeVersion": 1.1, "position": [0, 0],
+      "parameters": { "httpMethod": "POST", "path": "publish-social-post", "responseMode": "onReceived" }
+    },
+    {
+      "id": "gate1", "name": "Approval Gate", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [220, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "combinator": "and",
+          "conditions": [
+            { "operator": { "type": "string", "operation": "equals" }, "leftValue": "={{ $json.body.secret }}", "rightValue": "={{ $env.ENGINE_WEBHOOK_SECRET }}" },
+            { "operator": { "type": "string", "operation": "equals" }, "leftValue": "={{ $json.body.calendar_item.status }}", "rightValue": "approved" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "post1", "name": "Post via Buffer", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [440, -80],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.bufferapp.com/1/updates/create.json",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": { "parameters": [
+          { "name": "access_token", "value": "={{ $env.BUFFER_ACCESS_TOKEN }}" },
+          { "name": "text", "value": "={{ $json.body.calendar_item.title }}" },
+          { "name": "now", "value": "true" }
+        ] }
+      }
+    },
+    {
+      "id": "wb1", "name": "Write back: published", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [660, -80],
+      "parameters": {
+        "method": "POST",
+        "url": "http://engine:3000/api/calendar",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ secret: $env.ENGINE_WEBHOOK_SECRET, id: $('Webhook').item.json.body.calendar_item.id, status: 'published', published_at: $now.toISO() }) }}"
+      }
+    },
+    {
+      "id": "fail1", "name": "Write back: failed gate", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [440, 120],
+      "parameters": {
+        "method": "POST",
+        "url": "http://engine:3000/api/calendar",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ secret: $env.ENGINE_WEBHOOK_SECRET, id: $('Webhook').item.json.body.calendar_item.id, status: 'failed' }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Approval Gate", "type": "main", "index": 0 }]] },
+    "Approval Gate": { "main": [[{ "node": "Post via Buffer", "type": "main", "index": 0 }], [{ "node": "Write back: failed gate", "type": "main", "index": 0 }]] },
+    "Post via Buffer": { "main": [[{ "node": "Write back: published", "type": "main", "index": 0 }]] }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "AI Marketing Engine",
+  "dockerComposeFile": ["../docker-compose.yml", "docker-compose.devcontainer.yml"],
+  "service": "engine",
+  "workspaceFolder": "/workspaces/ai-marketing-engine",
+  "initializeCommand": [
+    "docker", "run", "--rm",
+    "-v", "${localWorkspaceFolder}:/r",
+    "alpine",
+    "sh", "-c", "[ -f /r/.env ] || cp /r/.env.example /r/.env"
+  ],
+  "overrideCommand": false,
+  "shutdownAction": "none",
+  "forwardPorts": [3000, 5678],
+  "portsAttributes": {
+    "3000": { "label": "Engine UI" },
+    "5678": { "label": "n8n editor" }
+  },
+  "remoteUser": "root",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-azuretools.vscode-docker",
+        "anthropic.claude-code"
+      ],
+      "settings": {
+        "files.eol": "\n"
+      }
+    }
+  }
+}

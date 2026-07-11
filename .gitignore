@@ -1,0 +1,19 @@
+# Instance secrets & data — NEVER commit
+.env
+workspace/
+
+# Node
+node_modules/
+ui/.next/
+ui/out/
+npm-debug.log*
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+MASTER_SPEC.md

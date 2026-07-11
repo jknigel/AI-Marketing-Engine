@@ -1,0 +1,42 @@
+{
+  "name": "Weekly Report Distribution",
+  "active": true,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "cr1", "name": "Monday 09:00", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.1, "position": [0, 0],
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 9 * * 1" }] } }
+    },
+    {
+      "id": "run1", "name": "Generate weekly report", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [220, 0],
+      "parameters": {
+        "method": "POST", "url": "http://engine:3000/api/run", "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ secret: $env.ENGINE_WEBHOOK_SECRET, profile: 'analytics-engine', task: 'Generate the weekly KPI report now and write it to workspace/reports/. Then summarize the top 3 findings in your final message.' }) }}",
+        "options": { "timeout": 600000 }
+      }
+    },
+    {
+      "id": "retro1", "name": "Trigger director retro", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [440, 0],
+      "parameters": {
+        "method": "POST", "url": "http://engine:3000/api/run", "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ secret: $env.ENGINE_WEBHOOK_SECRET, profile: 'marketing-director', task: 'The weekly KPI report was just generated in workspace/reports/. Run your weekly retro playbook now.' }) }}",
+        "options": { "timeout": 600000 }
+      }
+    },
+    {
+      "id": "slack1", "name": "Deliver to Slack", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [660, 0],
+      "parameters": {
+        "method": "POST", "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{ $env.SLACK_BOT_TOKEN }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: '#marketing', text: '📊 Weekly marketing report is ready — open the dashboard Reports tab.\\n\\n' + ($('Generate weekly report').item.json.output || '').slice(0, 2500) }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Monday 09:00": { "main": [[{ "node": "Generate weekly report", "type": "main", "index": 0 }]] },
+    "Generate weekly report": { "main": [[{ "node": "Trigger director retro", "type": "main", "index": 0 }]] },
+    "Trigger director retro": { "main": [[{ "node": "Deliver to Slack", "type": "main", "index": 0 }]] }
+  }
+}

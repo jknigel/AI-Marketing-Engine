@@ -1,0 +1,47 @@
+{
+  "name": "Ad Spend Pacing",
+  "active": true,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "cr1", "name": "Daily 08:00", "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.1, "position": [0, 0],
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "0 8 * * *" }] } }
+    },
+    {
+      "id": "run1", "name": "Budget pacing check", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [220, 0],
+      "parameters": {
+        "method": "POST", "url": "http://engine:3000/api/run", "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ secret: $env.ENGINE_WEBHOOK_SECRET, profile: 'budget-planner', task: 'Run the daily pacing guard: pull yesterday\\'s spend rows from the KPI ledger, compare to SPEND_CAP_DAILY_USD and monthly envelopes, update budget/pacing-alerts.md, and end your reply with exactly OK, WARN or BREACH plus a one-line reason.' }) }}",
+        "options": { "timeout": 600000 }
+      }
+    },
+    {
+      "id": "if1", "name": "Breach or warn?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [440, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "loose" },
+          "combinator": "or",
+          "conditions": [
+            { "operator": { "type": "string", "operation": "contains" }, "leftValue": "={{ $json.output || '' }}", "rightValue": "WARN" },
+            { "operator": { "type": "string", "operation": "contains" }, "leftValue": "={{ $json.output || '' }}", "rightValue": "BREACH" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "slack1", "name": "Alert Slack", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [660, -80],
+      "parameters": {
+        "method": "POST", "url": "https://slack.com/api/chat.postMessage",
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [{ "name": "Authorization", "value": "=Bearer {{ $env.SLACK_BOT_TOKEN }}" }] },
+        "sendBody": true, "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: '#marketing', text: '🚨 Spend pacing alert:\\n' + ($('Budget pacing check').item.json.output || '').slice(-1500) }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Daily 08:00": { "main": [[{ "node": "Budget pacing check", "type": "main", "index": 0 }]] },
+    "Budget pacing check": { "main": [[{ "node": "Breach or warn?", "type": "main", "index": 0 }]] },
+    "Breach or warn?": { "main": [[{ "node": "Alert Slack", "type": "main", "index": 0 }], []] }
+  }
+}

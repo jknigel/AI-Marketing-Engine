@@ -1,0 +1,55 @@
+{
+  "name": "Publish: Blog Post",
+  "active": true,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "wh1", "name": "Webhook", "type": "n8n-nodes-base.webhook", "typeVersion": 1.1, "position": [0, 0],
+      "parameters": { "httpMethod": "POST", "path": "publish-blog-post", "responseMode": "onReceived" }
+    },
+    {
+      "id": "gate1", "name": "Approval Gate", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [220, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "combinator": "and",
+          "conditions": [
+            { "operator": { "type": "string", "operation": "equals" }, "leftValue": "={{ $json.body.secret }}", "rightValue": "={{ $env.ENGINE_WEBHOOK_SECRET }}" },
+            { "operator": { "type": "string", "operation": "equals" }, "leftValue": "={{ $json.body.calendar_item.status }}", "rightValue": "approved" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cms1", "name": "Publish to CMS (customize)", "type": "n8n-nodes-base.noOp", "typeVersion": 1, "position": [440, -80],
+      "parameters": {},
+      "notes": "Replace with your CMS node/API call (Ghost, WordPress, Webflow, or a GitHub commit for static sites). The artifact path is in {{ $json.body.calendar_item.artifact }}."
+    },
+    {
+      "id": "social1", "name": "Queue social snippets", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [660, -80],
+      "parameters": {
+        "method": "POST",
+        "url": "http://engine:3000/api/run",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ secret: $env.ENGINE_WEBHOOK_SECRET, profile: 'social-organic', task: 'A blog post was just published: ' + $('Webhook').item.json.body.calendar_item.title + ' (artifact: ' + $('Webhook').item.json.body.calendar_item.artifact + '). Create platform-native promo posts from its repurposing sheet and queue them for review.' }) }}"
+      }
+    },
+    {
+      "id": "wb1", "name": "Write back: published", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [880, -80],
+      "parameters": {
+        "method": "POST",
+        "url": "http://engine:3000/api/calendar",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ secret: $env.ENGINE_WEBHOOK_SECRET, id: $('Webhook').item.json.body.calendar_item.id, status: 'published', published_at: $now.toISO() }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Approval Gate", "type": "main", "index": 0 }]] },
+    "Approval Gate": { "main": [[{ "node": "Publish to CMS (customize)", "type": "main", "index": 0 }], []] },
+    "Publish to CMS (customize)": { "main": [[{ "node": "Queue social snippets", "type": "main", "index": 0 }]] },
+    "Queue social snippets": { "main": [[{ "node": "Write back: published", "type": "main", "index": 0 }]] }
+  }
+}
