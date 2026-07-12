@@ -34,7 +34,12 @@ mkdir -p workspace
 
 # 3. Detach from the template's git history
 if [ -d .git ]; then
-  read -r -p "Detach from template git history and start fresh? [y/N] " yn
+  yn="n"
+  if [ -t 0 ]; then
+    read -r -p "Detach from template git history and start fresh? [y/N] " yn || yn="n"
+  else
+    echo "no interactive terminal — skipping git-detach prompt (defaulting to No)."
+  fi
   if [ "${yn:-n}" = "y" ]; then
     rm -rf .git
     git init -q
