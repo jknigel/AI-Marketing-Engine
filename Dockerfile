@@ -40,6 +40,11 @@ RUN chmod +x docker/entrypoint.sh docker/healthcheck.sh scripts/*.sh
 
 ENV NODE_ENV=production
 ENV PORT=3000
+# Next.js standalone server binds to HOSTNAME; must be 0.0.0.0 inside a container
+# or the mapped port serves nothing (blank page / connection refused on the host).
+ENV HOSTNAME=0.0.0.0
+# Engine root is fixed in the image layout below.
+ENV ENGINE_ROOT=/app
 EXPOSE 3000
 
 ENTRYPOINT ["bash", "docker/entrypoint.sh"]

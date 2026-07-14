@@ -5,7 +5,8 @@
 Your AI marketing department, in a box: **31 capabilities** covering every
 marketing need, **Opencode CLI** for anything that needs code built,
 **everything-claude-code** as the agentic OS, and **n8n** for deterministic workflows —
-all inside one Docker Compose stack with a guided setup UI.
+all inside one Docker Compose stack. It boots straight to a live dashboard; you
+configure everything (keys, capabilities, brand, goals) from the Settings page.
 
 Spin up a full-stack AI Engine that is designed to work with your organization,
 connect to your systems, and driven by your people — a marketing team of strategy,
@@ -17,29 +18,45 @@ human gate.
 
 ## Quickstart
 
+You need **Docker Desktop** running. Then:
+
 ```bash
 git clone <this-repo> my-engine && cd my-engine
-./scripts/new-instance.sh my-engine     # creates .env with generated secrets
-docker compose up --build
+cp .env.example .env          # every key can stay blank — you fill them in the UI
+docker compose up --build     # first build takes a few minutes
 ```
 
-Open **http://localhost:3000** → the setup wizard walks you through:
+> On macOS/Linux (or Git Bash/WSL on Windows) you can instead run
+> `./scripts/new-instance.sh my-engine` — it copies `.env` **and** pre-generates the
+> engine secrets. Either way the engine also generates any missing secrets the first
+> time you save settings.
 
-1. **Name** the instance and set a dashboard password
-2. **Pick capabilities** (presets: Solo Creator / Startup / SMB / Enterprise, or custom)
-3. **Brand intake** — answer a short questionnaire or just give your website URL
-4. **Keys** — only the keys your enabled profiles need, validated live
-5. **Goals, schedules, launch** — the engine flips to run mode
+Open **http://localhost:3000** → you land straight on the **3D command-center
+dashboard**. It works immediately; nothing is gated behind a setup wizard.
 
-After setup you land on the **dashboard**: command bar (natural language → the right
-profile), calendar, approvals queue, reports, profile manager, health.
+To bring the agents to life, click **⚙ Settings** and:
+
+1. **LLM key** — paste your Anthropic API key (this one key powers every profile; it's
+   validated live). That's the only thing the engine truly needs.
+2. **Brand** — drop in your website URL (everything else is optional). The Brand
+   Strategist uses it to draft your Brand Kit.
+3. **Capabilities** — click a funnel category (Acquisition / Conversion / Retention /
+   Operations) to switch on everything in it, then fine-tune individual capabilities.
+   Foundation profiles are always on.
+4. **Integration keys** — only the extra keys your enabled capabilities need.
+5. **Goals** — pick a north-star metric and set your quarterly targets.
+
+Each section saves independently and takes effect immediately. Back on the dashboard,
+use the **command bar** (natural language → routed to the right profile), inspect any
+capability by clicking its island, and clear the **approvals** queue before anything
+publishes or spends.
 
 ## Architecture (short version)
 
 | Piece                     | Role                                                                                                                                                                                                                    |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `profiles/*.profile.md` | 31 capabilities as Hermes agent profiles. Frontmatter = manifest (tools, required keys, schedule); body = the agent's SOUL. Materialized into Hermes-native`HERMES_HOME` dirs at setup.                               |
-| `ui/`                   | Next.js app: setup wizard + operations dashboard + engine API (`/api/run`, `/api/approvals`, …)                                                                                                                    |
+| `ui/`                   | Next.js app: 3D command-center dashboard + Settings page + engine API (`/api/run`, `/api/approvals`, `/api/setup`, …)                                                                                              |
 | `workflows/*.json`      | n8n templates auto-imported at first boot: publish pipelines, lead intake, scheduler, pacing alerts, digests                                                                                                            |
 | `os/`                   | Agentic-OS layer (everything-claude-code): binding rules, publish-gate & brand-lint hooks, skills. Materialized into every profile's`HERMES_HOME` (rules+hooks appended to `SOUL.md`, skills copied to `skills/`) |
 | `contracts/`            | File contracts profiles communicate through: Brand Kit (incl. design system + tokens), Campaign Brief, Calendar, KPI Ledger, Knowledge Base                                                                             |
@@ -49,9 +66,11 @@ profile), calendar, approvals queue, reports, profile manager, health.
 ## The 31 profiles
 
 Every marketing capability ships as one Hermes profile (`profiles/*.profile.md`). Each
-carries its own persona, playbooks, tools, required keys, and output contracts. Profiles
-are grouped into **tiers** so the setup wizard can offer sensible presets — enable only
-the ones you need.
+carries its own persona, playbooks, tools, required keys, and output contracts. In
+Settings they're grouped by **funnel category** (Acquisition / Conversion / Retention /
+Operations) so you can switch on a whole stage at once; the **tiers** below describe how
+foundational each one is. Foundation profiles are always on — enable the rest as you need
+them.
 
 ### Tier 0 — Foundation (always installed; everything else depends on them)
 
@@ -116,10 +135,29 @@ the ones you need.
 
 ## Services
 
-| URL                       | What                                                    |
-| ------------------------- | ------------------------------------------------------- |
-| `http://localhost:3000` | Setup wizard / dashboard                                |
-| `http://localhost:5678` | n8n editor (basic auth:`N8N_USER` / `N8N_PASSWORD`) |
+| URL                            | What                                                    |
+| ------------------------------ | ------------------------------------------------------- |
+| `http://localhost:3000`      | 3D command-center dashboard                             |
+| `http://localhost:3000/settings` | Configure keys, capabilities, brand & goals         |
+| `http://localhost:5678`      | n8n editor (basic auth:`N8N_USER` / `N8N_PASSWORD`) |
+
+## Troubleshooting
+
+- **Blank page / "can't connect" at localhost:3000** — give the first `docker compose up
+  --build` a couple of minutes to finish building, and make sure port 3000 (and 5678 for
+  n8n) are free. The container binds `HOSTNAME=0.0.0.0` so the mapped port is reachable
+  from the host; if you run the image outside compose, set that env var yourself.
+- **Dashboard says the engine needs a key** — that's expected on a fresh clone. Open
+  **⚙ Settings** and paste your Anthropic API key; the agents activate immediately.
+- **`EBUSY: resource busy or locked` when building locally** — only happens if you run
+  `npm run build` directly on Windows (native `sharp`/`swc` binaries get file-locked).
+  Use Docker (the build runs in a clean Linux stage) or close editors/AV and retry.
+- **`hermes not available` when running a command locally** — the Hermes agent CLI is
+  installed inside the container image. Run the engine via `docker compose`, not
+  `next dev`, to execute profile tasks.
+- **Shell script errors (`bad interpreter`, `\r`)** — ensure the `.sh` files kept LF line
+  endings (the repo's `.gitattributes` enforces this); re-clone if your Git converted them
+  to CRLF.
 
 ## Developing in VS Code (devcontainer)
 
@@ -133,7 +171,7 @@ leaves the stack running.
 ## What persists (and where)
 
 Everything the engine produces lives on the host, so `docker compose down` /
-container crashes lose nothing: `.env` (keys + secrets written by the wizard),
+container crashes lose nothing: `.env` (keys + secrets written from Settings),
 `workspace/` (brand kit, knowledge base, campaigns, runs, approvals, audit log,
 Hermes homes, opencode state), `workspace/n8n/` (workflow DB + credentials), and
 `workspace/postgres/` (scale profile). Only rebuildable artifacts (installed CLIs,

@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   });
   const workflows = await listWorkflows().catch(() => []);
   return NextResponse.json({
-    mode: envValue("ENGINE_MODE") || "setup",
+    mode: envValue("ENGINE_MODE") || "run",
     engineName: cfg?.instanceName || envValue("ENGINE_NAME") || "",
     config: cfg,
     profiles,

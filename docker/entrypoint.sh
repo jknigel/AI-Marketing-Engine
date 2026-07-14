@@ -27,9 +27,10 @@ fi
 [ -f /app/workspace/calendar.json ] || echo '{"items":[]}' > /app/workspace/calendar.json
 [ -f /app/workspace/analytics/kpis.json ] || echo '{"kpis":[],"updated":null}' > /app/workspace/analytics/kpis.json
 
-# 2. Sanity: warn (don't die) if core keys are missing — setup mode collects them
-if [ -z "${ANTHROPIC_API_KEY:-}" ] && [ "${ENGINE_MODE:-setup}" = "run" ]; then
-  echo "WARN: ANTHROPIC_API_KEY is empty — profiles cannot run. Re-open the wizard (Profile Manager > Keys)."
+# 2. Sanity: warn (don't die) if the core LLM key is missing — add it in the UI
+if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+  echo "WARN: ANTHROPIC_API_KEY is empty — profiles cannot run yet."
+  echo "      Add it at http://localhost:${PORT:-3000}/settings (LLM key is the first field)."
 fi
 
 # 3. Validate enabled profiles' key requirements (non-fatal report)

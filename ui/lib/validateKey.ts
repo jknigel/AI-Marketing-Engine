@@ -1,5 +1,5 @@
 /**
- * Live key validation used by the setup wizard.
+ * Live key validation used by the Settings page.
  * Each validator makes the cheapest possible authenticated call.
  * Keys without a validator get a format-only check ("unverified").
  */

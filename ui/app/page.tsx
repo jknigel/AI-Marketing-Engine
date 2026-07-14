@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
-import { readConfig } from "@/lib/profiles";
 
 export const dynamic = "force-dynamic";
 
+// The engine works from the get-go — no setup gate. Everything the old wizard
+// collected is now editable any time at /settings.
 export default function Home() {
-  const cfg = readConfig();
-  redirect(cfg?.setupCompletedAt ? "/dashboard" : "/setup");
+  redirect("/dashboard");
 }

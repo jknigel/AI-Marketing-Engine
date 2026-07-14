@@ -45,6 +45,8 @@ label { display: block; margin: 10px 0 4px; font-size: 13px; color: var(--muted)
 .badge.bad { color: var(--bad); border-color: var(--bad); }
 .badge.dim { color: var(--muted); }
 
+.secHead { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 700; margin: 14px 0 8px; }
+
 .steps { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }
 .step { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; color: var(--muted); }
 .step.active { border-color: var(--accent); color: var(--accent); font-weight: 700; }

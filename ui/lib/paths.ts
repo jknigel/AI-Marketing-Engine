@@ -4,12 +4,16 @@ import fs from "node:fs";
 /** Engine root: /app in the container; repo root in local dev. */
 export const ROOT = (() => {
   if (process.env.ENGINE_ROOT) return process.env.ENGINE_ROOT;
-  // In the container the UI lives at /app/ui; locally at <repo>/ui.
+  // In the container the UI lives at /app/ui; locally at <repo>/ui. Walk up from
+  // cwd looking for the engine's `profiles/` dir. (We intentionally do NOT also
+  // require docker-compose.yml — it isn't copied into the runtime image, so
+  // requiring it made in-container resolution silently fall through.)
   let dir = process.cwd();
-  for (let i = 0; i < 4; i++) {
-    if (fs.existsSync(path.join(dir, "profiles")) && fs.existsSync(path.join(dir, "docker-compose.yml")))
-      return dir;
-    dir = path.dirname(dir);
+  for (let i = 0; i < 5; i++) {
+    if (fs.existsSync(path.join(dir, "profiles")) && fs.existsSync(path.join(dir, "os"))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break; // reached filesystem root
+    dir = parent;
   }
   return path.resolve(process.cwd(), "..");
 })();

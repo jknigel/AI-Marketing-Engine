@@ -8,8 +8,10 @@ services:
     env_file: .env
     environment:
       - N8N_BASE_URL=http://n8n:5678
+      - ENGINE_ROOT=/app # pin the engine root so path resolution never guesses
+      - HOSTNAME=0.0.0.0 # Next standalone must bind all interfaces, not localhost
     volumes:
-      - ./.env:/app/.env # wizard writes keys/secrets here — MUST live on the host
+      - ./.env:/app/.env # Settings UI writes keys/secrets here — MUST live on the host
       - ./workspace:/app/workspace # instance data survives rebuilds
       - ./profiles:/app/profiles # editable without rebuild
       - ./os:/app/os

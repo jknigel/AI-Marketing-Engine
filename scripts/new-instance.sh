@@ -52,4 +52,5 @@ fi
 echo ""
 echo "Next steps:"
 echo "  1. docker compose up --build"
-echo "  2. open http://localhost:3000 and complete the setup wizard"
+echo "  2. open http://localhost:3000 (the dashboard loads immediately)"
+echo "  3. click Settings and paste your Anthropic API key to bring the agents to life"
