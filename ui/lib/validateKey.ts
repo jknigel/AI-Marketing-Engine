@@ -15,6 +15,8 @@ const validators: Record<string, (v: string) => Promise<Verdict>> = {
     ),
   OPENAI_API_KEY: async (v) =>
     check(await fetch("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${v}` }, signal: AbortSignal.timeout(8000) })),
+  DEEPSEEK_API_KEY: async (v) =>
+    check(await fetch("https://api.deepseek.com/models", { headers: { Authorization: `Bearer ${v}` }, signal: AbortSignal.timeout(8000) })),
   OPENROUTER_API_KEY: async (v) =>
     check(await fetch("https://openrouter.ai/api/v1/models", { headers: { Authorization: `Bearer ${v}` }, signal: AbortSignal.timeout(8000) })),
   TAVILY_API_KEY: async (v) =>

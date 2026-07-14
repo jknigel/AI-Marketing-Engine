@@ -30,6 +30,20 @@ const CATEGORY_BLURB: Record<string, string> = {
   ops: "Behind the scenes — analytics, automation, budget, compliance.",
 };
 
+// LLM providers the engine (Hermes) can run on. `key` is the .env var; `model`
+// is a sensible default HERMES_MODEL string the user can edit.
+const PROVIDERS = {
+  anthropic: { label: "Anthropic (Claude)", key: "ANTHROPIC_API_KEY", model: "anthropic/claude-opus-4-8", hint: "sk-ant-…" },
+  openai: { label: "OpenAI (GPT)", key: "OPENAI_API_KEY", model: "openai/gpt-4o", hint: "sk-…" },
+  deepseek: { label: "DeepSeek", key: "DEEPSEEK_API_KEY", model: "deepseek/deepseek-chat", hint: "sk-…" },
+} as const;
+type ProviderId = keyof typeof PROVIDERS;
+const LLM_KEYS = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "OPENROUTER_API_KEY"];
+const providerOf = (model: string): ProviderId => {
+  const p = (model || "").split("/")[0] as ProviderId;
+  return p in PROVIDERS ? p : "anthropic";
+};
+
 const NORTH_STARS = [
   "Qualified signups / month",
   "Marketing-qualified leads (MQLs) / month",
@@ -87,6 +101,9 @@ export default function Settings() {
   const [validating, setValidating] = useState<string | null>(null);
   const [toast, setToast] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
+  const [provider, setProvider] = useState<ProviderId>("anthropic");
+  const [model, setModel] = useState<string>(PROVIDERS.anthropic.model);
+  const [llmConfigured, setLlmConfigured] = useState(false);
 
   async function load() {
     const res = await fetch("/api/state", { headers: authHeaders() });
@@ -108,6 +125,14 @@ export default function Settings() {
       [...p.missing_keys, ...p.missing_optional].forEach((k) => missing.add(k));
     }
     setConfiguredKeys(new Set([...referenced].filter((k) => !missing.has(k))));
+    // LLM provider + model (Hermes runs on one provider)
+    if (s.hermesModel) {
+      setModel(s.hermesModel);
+      setProvider(providerOf(s.hermesModel));
+    }
+    // an LLM key is configured if no profile still lists a provider key as missing
+    const anyLLMMissing = list.some((p) => [...p.missing_keys, ...p.missing_optional].some((k) => LLM_KEYS.includes(k)));
+    setLlmConfigured(list.length > 0 && !anyLLMMissing);
     if (s.engineName) setForm((f) => ({ ...f, instanceName: s.engineName }));
     if (s.config) {
       setForm((f) => ({
@@ -182,8 +207,8 @@ export default function Settings() {
     const opt = new Set<string>();
     for (const p of profiles) {
       if (!enabled.has(p.id)) continue;
-      p.requires_keys.forEach((k) => k !== "ANTHROPIC_API_KEY" && req.add(k));
-      p.optional_keys.forEach((k) => k !== "ANTHROPIC_API_KEY" && opt.add(k));
+      p.requires_keys.forEach((k) => !LLM_KEYS.includes(k) && req.add(k));
+      p.optional_keys.forEach((k) => !LLM_KEYS.includes(k) && opt.add(k));
     }
     opt.forEach((k) => req.has(k) && opt.delete(k));
     return { required: [...req].sort(), optional: [...opt].sort() };
@@ -212,6 +237,19 @@ export default function Settings() {
     if (Object.keys(filled).length === 0) return flash("Nothing to save — enter a key first.");
     save({ keys: filled }, "Keys");
     setKeys({});
+  }
+
+  function pickProvider(id: ProviderId) {
+    setProvider(id);
+    setModel(PROVIDERS[id].model); // reset to that provider's default model (still editable)
+  }
+
+  function saveLLM() {
+    const pk = PROVIDERS[provider].key;
+    const patch: Record<string, string> = { HERMES_MODEL: model.trim() || PROVIDERS[provider].model };
+    if (keys[pk]?.trim()) patch[pk] = keys[pk].trim();
+    save({ keys: patch }, "LLM provider");
+    setKeys((k) => ({ ...k, [pk]: "" }));
   }
 
   if (needPw)
@@ -251,24 +289,39 @@ export default function Settings() {
         </div>
       )}
 
-      {/* ---------------------------------------------------------------- LLM key */}
+      {/* ---------------------------------------------------------------- LLM provider */}
       <div className="panel">
-        <h2>1 · LLM key</h2>
+        <h2>1 · LLM provider</h2>
         <p className="muted small">
-          The engine runs on Claude. This one key powers every profile — add it first and the engine comes alive.
+          The engine runs on one AI provider — pick it, add that provider&rsquo;s key, and every profile comes alive.
+          {llmConfigured && <span className="badge ok" style={{ marginLeft: 8 }}>a key is configured</span>}
         </p>
+        <div className="row" style={{ marginBottom: 12 }}>
+          {(Object.keys(PROVIDERS) as ProviderId[]).map((id) => (
+            <button key={id} className={provider === id ? "" : "ghost"} onClick={() => pickProvider(id)}>
+              {PROVIDERS[id].label}
+            </button>
+          ))}
+        </div>
         <KeyField
-          k="ANTHROPIC_API_KEY"
-          value={keys.ANTHROPIC_API_KEY || ""}
-          configured={configuredKeys.has("ANTHROPIC_API_KEY")}
-          verdict={keyVerdicts.ANTHROPIC_API_KEY}
-          validating={validating === "ANTHROPIC_API_KEY"}
-          onChange={(v) => setKeys({ ...keys, ANTHROPIC_API_KEY: v })}
-          onTest={() => validate("ANTHROPIC_API_KEY")}
+          k={PROVIDERS[provider].key}
+          value={keys[PROVIDERS[provider].key] || ""}
+          configured={llmConfigured}
+          verdict={keyVerdicts[PROVIDERS[provider].key]}
+          validating={validating === PROVIDERS[provider].key}
+          onChange={(v) => setKeys({ ...keys, [PROVIDERS[provider].key]: v })}
+          onTest={() => validate(PROVIDERS[provider].key)}
         />
+        <label style={{ marginTop: 12 }}>
+          Model <span className="badge dim">provider/model</span>
+        </label>
+        <input value={model} onChange={(e) => setModel(e.target.value)} placeholder={PROVIDERS[provider].model} />
+        <p className="muted small" style={{ marginTop: 4 }}>
+          Sets <code>HERMES_MODEL</code>. Default for {PROVIDERS[provider].label} is <code>{PROVIDERS[provider].model}</code>; edit to pick a specific model.
+        </p>
         <div className="row" style={{ marginTop: 10 }}>
-          <button onClick={saveKeys} disabled={saving === "Keys"}>
-            {saving === "Keys" ? <span className="spinner" /> : "Save key"}
+          <button onClick={saveLLM} disabled={saving === "LLM provider"}>
+            {saving === "LLM provider" ? <span className="spinner" /> : "Save provider"}
           </button>
         </div>
       </div>

@@ -88,10 +88,21 @@ export function writeConfig(cfg: EngineConfig) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
 }
 
+// The engine runs on ONE LLM provider. Profiles historically require
+// ANTHROPIC_API_KEY, but any supported provider key satisfies that need — so we
+// treat these as an interchangeable group when deciding what's "missing".
+export const LLM_PROVIDER_KEYS = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "OPENROUTER_API_KEY"];
+export const hasAnyLLMKey = () => LLM_PROVIDER_KEYS.some((k) => !!envValue(k));
+
+function keyMissing(k: string): boolean {
+  if (LLM_PROVIDER_KEYS.includes(k)) return !hasAnyLLMKey(); // any provider key covers it
+  return !envValue(k);
+}
+
 export function keyStatus(p: ProfileMeta): { missing: string[]; optionalMissing: string[] } {
   return {
-    missing: p.requires_keys.filter((k) => !envValue(k)),
-    optionalMissing: p.optional_keys.filter((k) => !envValue(k)),
+    missing: p.requires_keys.filter(keyMissing),
+    optionalMissing: p.optional_keys.filter(keyMissing),
   };
 }
 
@@ -154,7 +165,7 @@ export function materializeProfile(p: ProfileMeta, engineName: string) {
   );
 
   const scoped: string[] = [`# scoped keys for profile: ${p.id}`];
-  for (const k of ["ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", ...p.requires_keys, ...p.optional_keys]) {
+  for (const k of [...LLM_PROVIDER_KEYS, ...p.requires_keys, ...p.optional_keys]) {
     const v = envValue(k);
     if (v && !scoped.some((l) => l.startsWith(k + "="))) scoped.push(`${k}=${v}`);
   }

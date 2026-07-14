@@ -36,8 +36,9 @@ dashboard**. It works immediately; nothing is gated behind a setup wizard.
 
 To bring the agents to life, click **⚙ Settings** and:
 
-1. **LLM key** — paste your Anthropic API key (this one key powers every profile; it's
-   validated live). That's the only thing the engine truly needs.
+1. **LLM provider** — pick **Anthropic (Claude)**, **OpenAI (GPT)**, or **DeepSeek**, paste
+   that provider's API key (validated live), and optionally set the model. This one key
+   powers every profile — it's the only thing the engine truly needs.
 2. **Brand** — drop in your website URL (everything else is optional). The Brand
    Strategist uses it to draft your Brand Kit.
 3. **Capabilities** — click a funnel category (Acquisition / Conversion / Retention /
@@ -148,7 +149,8 @@ them.
   n8n) are free. The container binds `HOSTNAME=0.0.0.0` so the mapped port is reachable
   from the host; if you run the image outside compose, set that env var yourself.
 - **Dashboard says the engine needs a key** — that's expected on a fresh clone. Open
-  **⚙ Settings** and paste your Anthropic API key; the agents activate immediately.
+  **⚙ Settings**, pick your LLM provider (Anthropic / OpenAI / DeepSeek) and paste that
+  provider's key; the agents activate immediately.
 - **`EBUSY: resource busy or locked` when building locally** — only happens if you run
   `npm run build` directly on Windows (native `sharp`/`swc` binaries get file-locked).
   Use Docker (the build runs in a clean Linux stage) or close editors/AV and retry.

@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     mode: envValue("ENGINE_MODE") || "run",
     engineName: cfg?.instanceName || envValue("ENGINE_NAME") || "",
+    hermesModel: envValue("HERMES_MODEL") || "anthropic/claude-opus-4-8",
     config: cfg,
     profiles,
     n8n: { healthy: await n8nHealthy(), workflows },
