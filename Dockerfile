@@ -40,6 +40,13 @@ RUN for i in 1 2 3; do \
     done \
     && command -v hermes && hermes --version
 
+# `hermes dashboard` (the web UI) needs the [web,pty] extras (FastAPI/Uvicorn).
+# Best-effort — if it can't resolve the venv here, the README shows the one-liner
+# to run inside the container; the core `hermes` binary above is the hard gate.
+RUN cd /usr/local/lib/hermes-agent \
+    && /root/.hermes/bin/uv pip install -e ".[web,pty]" \
+    || echo "WARN: hermes web extras not installed at build time — run: cd /usr/local/lib/hermes-agent && uv pip install -e '.[web,pty]'"
+
 WORKDIR /app
 
 # Engine assets
@@ -65,5 +72,7 @@ ENV HOSTNAME=0.0.0.0
 # Engine root is fixed in the image layout below.
 ENV ENGINE_ROOT=/app
 EXPOSE 3000
+# Hermes web dashboard (served by the `hermes` compose service — see docker-compose.yml).
+EXPOSE 9119
 
 ENTRYPOINT ["bash", "docker/entrypoint.sh"]

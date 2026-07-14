@@ -140,7 +140,29 @@ them.
 | ------------------------------ | ------------------------------------------------------- |
 | `http://localhost:3000`      | 3D command-center dashboard                             |
 | `http://localhost:3000/settings` | Configure keys, capabilities, brand & goals         |
+| `http://localhost:9119`      | Hermes agent dashboard (basic auth:`HERMES_DASHBOARD_USER` / `HERMES_DASHBOARD_PASSWORD`) |
 | `http://localhost:5678`      | n8n editor (basic auth:`N8N_USER` / `N8N_PASSWORD`) |
+
+### Accessing Hermes
+
+Hermes (the agent runtime) is **not** a website that's already running — it's a CLI + web
+dashboard that lives inside the `engine`/`hermes` container image. `docker compose up`
+starts the `hermes` service, which runs `hermes dashboard --host 0.0.0.0 --port 9119` and
+publishes it at **http://localhost:9119** (log in with `HERMES_DASHBOARD_USER` /
+`HERMES_DASHBOARD_PASSWORD` from `.env`). By default `hermes dashboard` binds to
+`127.0.0.1` *inside* the container (unreachable from the host) — that's why the compose
+service binds `0.0.0.0` and maps the port.
+
+To use the Hermes CLI directly:
+```bash
+docker compose exec engine hermes --version     # confirm it's installed
+docker compose exec engine hermes --help        # all commands
+docker compose exec engine hermes chat "hello"  # one-off agent turn
+```
+If the dashboard reports missing web dependencies, install them once in the container:
+```bash
+docker compose exec engine sh -lc "cd /usr/local/lib/hermes-agent && uv pip install -e '.[web,pty]'"
+```
 
 ## Troubleshooting
 

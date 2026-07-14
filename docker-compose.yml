@@ -29,6 +29,30 @@ services:
       start_period: 20s
     restart: unless-stopped
 
+  # Hermes web dashboard — the agent runtime's own control panel.
+  # `hermes dashboard` serves on 127.0.0.1:9119 by default (localhost INSIDE the
+  # container, so invisible from the host); we bind 0.0.0.0 and publish the port.
+  # Binding non-loopback auto-enables Hermes' auth gate → set the basic-auth vars.
+  # Open it at http://localhost:9119 (published to host-localhost only for safety).
+  hermes:
+    build: .
+    entrypoint: ["hermes"]
+    command: ["dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open"]
+    env_file: .env
+    environment:
+      - HERMES_HOME=/root/.hermes
+      - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=${HERMES_DASHBOARD_USER:-admin}
+      - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=${HERMES_DASHBOARD_PASSWORD:-changeme}
+      - HERMES_DASHBOARD_BASIC_AUTH_SECRET=${HERMES_DASHBOARD_SECRET:-please-change-me-32-bytes-minimum-secret}
+    ports:
+      - "127.0.0.1:9119:9119" # host-localhost only; it reads/writes .env (keys)
+    volumes:
+      # Manage the same keys the engine uses. (We do NOT mount over all of
+      # /root/.hermes — that would hide the Hermes install baked into the image.)
+      - ./.env:/root/.hermes/.env
+      - ./workspace:/app/workspace # so it can see the engine's materialized profiles
+    restart: unless-stopped
+
   n8n:
     image: n8nio/n8n:latest
     ports:
