@@ -3,6 +3,10 @@ name: ai-marketing-engine
 services:
   engine:
     build: .
+    # Explicit tag so the `hermes` service can reuse this exact image instead of
+    # triggering a second, parallel build of the same Dockerfile (two concurrent
+    # npm installs + git clones saturate the network → ECONNRESET).
+    image: ai-marketing-engine:latest
     ports:
       - "${UI_PORT:-3000}:3000"
     env_file: .env
@@ -35,7 +39,16 @@ services:
   # Binding non-loopback auto-enables Hermes' auth gate → set the basic-auth vars.
   # Open it at http://localhost:9119 (published to host-localhost only for safety).
   hermes:
+    # Same build context AND same image tag as `engine`, so Compose deduplicates
+    # and builds the Dockerfile exactly ONCE (before this fix each service built its
+    # own image in parallel — two concurrent npm installs + git clones saturated the
+    # network and dropped connections → npm ECONNRESET). Keeping `build:` here also
+    # means a plain `docker compose up` still resolves the image locally.
     build: .
+    image: ai-marketing-engine:latest
+    depends_on:
+      engine:
+        condition: service_started
     entrypoint: ["hermes"]
     command: ["dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open"]
     env_file: .env

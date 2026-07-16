@@ -2,7 +2,19 @@
 FROM node:22-bookworm-slim AS ui-build
 WORKDIR /build/ui
 COPY ui/package.json ui/package-lock.json* ./
-RUN npm install
+# npm over Docker's NAT is prone to dropped connections (ECONNRESET / "network
+# aborted"), which otherwise kills the whole build after several minutes. Make the
+# fetcher patient and retry-happy, then use `npm ci` (deterministic, lockfile-driven)
+# wrapped in a retry loop so a transient blip re-runs instead of failing the build.
+RUN npm config set fetch-retries 5 \
+    && npm config set fetch-retry-factor 2 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm config set fetch-retry-maxtimeout 120000 \
+    && npm config set fetch-timeout 600000
+RUN for i in 1 2 3; do \
+      echo "npm ci attempt $i" && npm ci --no-audit --no-fund && break || \
+      { echo "npm ci attempt $i failed; retrying" && sleep 10; }; \
+    done
 COPY ui/ ./
 RUN npm run build
 
@@ -17,8 +29,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-venv build-essential python3-dev libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Opencode CLI (tool used by profiles to build things)
-RUN npm install -g opencode-ai
+# Opencode CLI (tool used by profiles to build things). Same flaky-network
+# hardening as the UI stage: patient fetch settings + a retry loop.
+RUN npm config set fetch-retries 5 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm config set fetch-retry-maxtimeout 120000 \
+    && npm config set fetch-timeout 600000
+RUN for i in 1 2 3; do \
+      echo "opencode install attempt $i" && npm install -g opencode-ai --no-audit --no-fund && break || \
+      { echo "opencode install attempt $i failed; retrying" && sleep 10; }; \
+    done \
+    && command -v opencode
 
 # Hermes agent (NousResearch) — official installer.
 #   --skip-setup : no interactive API-key wizard (keys come from the engine .env)

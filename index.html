@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIE360 — Marketing Engine Command Center</title>
+<style>
+  /* ---------------------------------------------------------- tokens */
+  :root {
+    --bg-0: #060913;
+    --bg-1: #0d1226;          /* chart / panel surface (palette validated vs this) */
+    --panel: rgba(11, 15, 32, .84);
+    --panel-solid: #10162e;
+    --line: rgba(110, 140, 220, .22);
+    --line-strong: rgba(120, 160, 255, .45);
+    --text-primary: #eef2ff;
+    --text-secondary: #a7b0d0;
+    --text-muted: #6b7499;
+    --hud: #55e6ff;
+
+    /* categorical accents — validated order, dark surface #0d1226 */
+    --acc-strategist: #1f9fc7;
+    --acc-content:    #d55181;
+    --acc-social:     #c98500;
+    --acc-outreach:   #9085e9;
+    --acc-seo:        #199e70;
+    --acc-analyst:    #d95926;
+    --acc-zone:       #5a6a9a;
+
+    --good: #0ca30c;
+    --critical: #d03b3b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background:
+      radial-gradient(1200px 700px at 70% -10%, #131b3f 0%, transparent 60%),
+      radial-gradient(900px 600px at 10% 110%, #0e1a38 0%, transparent 55%),
+      var(--bg-0);
+    color: var(--text-primary);
+    font: 14px/1.45 "Segoe UI", system-ui, sans-serif;
+    overflow: hidden;
+  }
+  #stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+
+  /* ---------------------------------------------------------- layout */
+  #app {
+    position: relative; z-index: 1;
+    display: grid;
+    grid-template-rows: 52px 1fr;
+    grid-template-columns: 300px 1fr 372px;
+    grid-template-areas: "top top top" "left stage right";
+    height: 100vh; gap: 12px; padding: 12px;
+    pointer-events: none;             /* map is full-screen underneath — let clicks through */
+  }
+  #app .panel, #topbar { pointer-events: auto; }
+  @media (max-width: 1280px) {
+    #app { grid-template-columns: 260px 1fr 320px; }
+  }
+  @media (max-width: 1024px) {
+    /* "stage" row is an empty window onto the fixed full-screen map */
+    #app { grid-template-columns: 1fr; grid-template-rows: 52px 44vh auto auto;
+           grid-template-areas: "top" "stage" "left" "right"; overflow: auto; height: auto; }
+    body { overflow: auto; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    backdrop-filter: blur(10px);
+    position: relative;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    min-height: 0;
+  }
+  .panel::before, .panel::after {  /* HUD corner ticks */
+    content: ""; position: absolute; width: 14px; height: 14px; pointer-events: none;
+    border: 1px solid var(--line-strong);
+  }
+  .panel::before { top: -1px; left: -1px; border-right: none; border-bottom: none; border-radius: 10px 0 0 0; }
+  .panel::after  { bottom: -1px; right: -1px; border-left: none; border-top: none; border-radius: 0 0 10px 0; }
+
+  .ptitle {
+    padding: 10px 14px 8px;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: .22em; text-transform: uppercase;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--line);
+    flex: none;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .ptitle .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--hud); box-shadow: 0 0 8px var(--hud); }
+  .pbody { padding: 12px 14px; overflow-y: auto; min-height: 0; flex: 1; }
+  .pbody::-webkit-scrollbar { width: 8px; }
+  .pbody::-webkit-scrollbar-thumb { background: rgba(120,150,230,.25); border-radius: 4px; }
+
+  /* ---------------------------------------------------------- top bar */
+  #topbar {
+    grid-area: top;
+    display: flex; align-items: center; gap: 16px; padding: 0 18px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    backdrop-filter: blur(10px);
+  }
+  #topbar .logo {
+    font-size: 15px; font-weight: 700; letter-spacing: .3em; text-transform: uppercase;
+    background: linear-gradient(90deg, #7fd8ff, #b39dff);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    white-space: nowrap;
+  }
+  #topbar .sub { font-size: 10px; letter-spacing: .28em; color: var(--text-muted); text-transform: uppercase; }
+  #topbar .spacer { flex: 1; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+    padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line-strong);
+    color: var(--text-secondary); white-space: nowrap;
+  }
+  .pill .st { width: 8px; height: 8px; border-radius: 50%; }
+  .pill.on  .st { background: var(--good); box-shadow: 0 0 8px var(--good); }
+  .pill.off .st { background: var(--critical); box-shadow: 0 0 8px var(--critical); }
+  #clock { font-family: Consolas, monospace; font-size: 13px; color: var(--hud); letter-spacing: .1em; }
+  #demoBadge {
+    display: none; font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+    color: #ffce73; border: 1px solid rgba(255,206,115,.5); padding: 4px 10px; border-radius: 999px;
+  }
+
+  /* ------------------------------------------- stage (full-screen background) */
+  /* top offset = page padding + navbar height + gap, so no artwork hides under it */
+  #stageWrap { position: fixed; inset: 76px 0 0 0; z-index: 0; perspective: 1400px; overflow: hidden; }
+  #stage {
+    position: absolute; inset: 0;
+    transform-style: preserve-3d;
+    transition: transform .15s ease-out;
+  }
+  #stage svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  .isl .hl { opacity: 0; transition: opacity .25s ease; pointer-events: none; }
+  .isl:hover .hl, .isl.active .hl, .isl:focus-within .hl { opacity: 1; }
+  .isl .ring {
+    fill: none; stroke-width: 2.5; stroke-linejoin: round;
+    opacity: 0; pointer-events: none;
+    transition: opacity .25s ease;
+  }
+  .isl:hover .ring, .isl:focus-within .ring { opacity: .95; animation: pulse 1.6s ease-in-out infinite; }
+  .isl.active .ring { opacity: 1; }
+  body.debug .ring { opacity: .9; }   /* ?debug — show all hotspots to calibrate polygons */
+  @keyframes pulse { 0%,100% { stroke-width: 2.5; } 50% { stroke-width: 5; } }
+  .isl .hit { fill: transparent; cursor: pointer; outline: none; }
+  .isl .hit:focus-visible { stroke: var(--hud); stroke-width: 2; stroke-dasharray: 6 5; }
+
+  #tt {
+    position: fixed; z-index: 40; pointer-events: none; display: none;
+    background: rgba(8, 12, 28, .92); border: 1px solid var(--line-strong);
+    border-radius: 8px; padding: 8px 12px; max-width: 260px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.5);
+  }
+  #tt .t1 { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+  #tt .t2 { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+  #tt .t3 { font-size: 10px; color: var(--text-muted); margin-top: 3px; letter-spacing: .08em; }
+
+  /* ---------------------------------------------------------- left: overview */
+  #left { grid-area: left; }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  .tile {
+    border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px;
+    background: rgba(20, 28, 58, .5);
+  }
+  .tile .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+  .tile .k { font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--text-muted); margin-top: 2px; }
+
+  .secHead { font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--text-muted); margin: 14px 0 8px; }
+
+  .obRow { display: grid; grid-template-columns: 74px 1fr 26px; gap: 8px; align-items: center; margin-bottom: 7px; }
+  .obRow .lbl { font-size: 11px; color: var(--text-secondary); text-transform: capitalize; }
+  .obRow .bar { height: 6px; border-radius: 4px; background: rgba(110,140,220,.14); overflow: hidden; }
+  .obRow .bar i { display: block; height: 100%; border-radius: 4px; background: #3987e5; }
+  .obRow .n { font-size: 11px; color: var(--text-secondary); text-align: right; font-variant-numeric: tabular-nums; }
+
+  .pRow {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 8px 9px; margin-bottom: 6px; border-radius: 8px;
+    border: 1px solid transparent; background: transparent;
+    color: inherit; font: inherit; text-align: left; cursor: pointer;
+  }
+  .pRow:hover, .pRow:focus-visible { background: rgba(40, 55, 110, .35); border-color: var(--line); outline: none; }
+  .chip { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .pRow .nm { font-size: 12.5px; font-weight: 600; letter-spacing: .04em; }
+  .pRow .md { font-size: 10.5px; color: var(--text-muted); font-family: Consolas, monospace; }
+  .pRow .when { margin-left: auto; font-size: 10px; color: var(--text-muted); white-space: nowrap; }
+
+  /* ---------------------------------------------------------- right: feed & profile */
+  #right { grid-area: right; }
+  #right .views { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .view { display: none; flex-direction: column; min-height: 0; flex: 1; }
+  .view.show { display: flex; }
+
+  .logRow { display: grid; grid-template-columns: 44px 78px 1fr; gap: 8px; padding: 6px 2px; border-bottom: 1px solid rgba(110,140,220,.1); }
+  .logRow .lt { font-family: Consolas, monospace; font-size: 10.5px; color: var(--text-muted); padding-top: 1px; }
+  .srcTag {
+    font-size: 9.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    border: 1px solid; border-radius: 4px; padding: 1px 5px; height: fit-content;
+    justify-self: start; white-space: nowrap;
+  }
+  .logRow .msg { font-size: 11.5px; color: var(--text-secondary); word-break: break-word; }
+  .logRow .msg b { color: var(--text-primary); font-weight: 600; }
+
+  /* profile view */
+  #pv { --acc: var(--hud); }
+  #pvHead { padding: 14px; border-bottom: 1px solid var(--line); position: relative; flex: none; }
+  #pvHead::before {
+    content: ""; position: absolute; inset: 0;
+    background: radial-gradient(340px 90px at 20% 0%, color-mix(in srgb, var(--acc) 26%, transparent), transparent 70%);
+    pointer-events: none;
+  }
+  .backBtn {
+    background: none; border: 1px solid var(--line-strong); color: var(--text-secondary);
+    border-radius: 6px; font: 600 10px/1 "Segoe UI", sans-serif; letter-spacing: .18em;
+    text-transform: uppercase; padding: 6px 10px; cursor: pointer; margin-bottom: 10px;
+  }
+  .backBtn:hover { color: var(--text-primary); border-color: var(--acc, var(--hud)); }
+  #pvName { font-size: 19px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+  #pvName .chip { display: inline-block; margin-right: 8px; width: 12px; height: 12px; background: var(--acc); box-shadow: 0 0 10px var(--acc); }
+  #pvRole { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+  #pvMeta { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .mtag {
+    font-size: 10px; font-family: Consolas, monospace; letter-spacing: .05em;
+    border: 1px solid var(--line-strong); border-radius: 5px; padding: 3px 8px; color: var(--text-secondary);
+  }
+  .mtag.acc { border-color: var(--acc); color: var(--text-primary); }
+
+  .userRow {
+    display: flex; align-items: center; gap: 10px; padding: 8px 9px;
+    border: 1px solid var(--line); border-radius: 8px; margin-bottom: 7px;
+    background: rgba(20, 28, 58, .45);
+  }
+  .avatar {
+    width: 30px; height: 30px; border-radius: 50%; flex: none;
+    display: grid; place-items: center;
+    background: rgba(90, 110, 180, .28); border: 1px solid var(--line-strong);
+    font-size: 11px; font-weight: 700; letter-spacing: .05em; color: var(--text-primary);
+  }
+  .userRow .un { font-size: 12.5px; font-weight: 600; }
+  .userRow .ue { font-size: 10.5px; color: var(--text-muted); }
+  .perm {
+    margin-left: auto; font-size: 9.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+    border: 1px solid var(--acc); color: var(--text-primary); border-radius: 999px; padding: 3px 9px;
+    background: color-mix(in srgb, var(--acc) 18%, transparent);
+    flex: none;
+  }
+  .perm.review { border-style: dashed; background: none; color: var(--text-secondary); }
+
+  .skillChips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .skillChips .sk {
+    font-size: 10.5px; font-family: Consolas, monospace; color: var(--text-secondary);
+    border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px;
+  }
+  details.soul { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  details.soul summary { cursor: pointer; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-secondary); }
+  details.soul pre { white-space: pre-wrap; font: 11px/1.5 Consolas, monospace; color: var(--text-secondary); margin-top: 8px; max-height: 180px; overflow: auto; }
+
+  /* zone view */
+  #zvCard { padding: 4px 2px; }
+  #zvName { font-size: 17px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+  #zvDesc { font-size: 12.5px; color: var(--text-secondary); margin: 10px 0 16px; }
+  .routeBtn {
+    display: inline-flex; align-items: center; gap: 8px;
+    border: 1px solid var(--line-strong); border-radius: 8px; padding: 9px 14px;
+    background: rgba(40, 55, 110, .35); color: var(--text-primary);
+    font: 600 12px "Segoe UI", sans-serif; letter-spacing: .06em; cursor: pointer;
+  }
+  .routeBtn:hover { border-color: var(--hud); }
+
+  .empty { color: var(--text-muted); font-size: 11.5px; padding: 8px 2px; }
+
+  /* ------------------------------------------- minimize to title bar */
+  .minBtn {
+    margin-left: auto; flex: none;
+    width: 20px; height: 20px; line-height: 1;
+    background: none; border: 1px solid var(--line-strong); border-radius: 5px;
+    color: var(--text-secondary); font-size: 12px; cursor: pointer;
+  }
+  .minBtn:hover { color: var(--hud); border-color: var(--hud); }
+  .minBtn.abs { position: absolute; top: 10px; right: 10px; z-index: 1; }
+  .panel.min { align-self: start; }               /* shrink to header height */
+  .panel.min .pbody { display: none; }
+  #right.min #pvMeta, #right.min #pvRole { display: none; }
+  #right.min #pvHead { padding-bottom: 10px; }
+
+  /* ------------------------------------------- panel collapse edge tabs */
+  #left, #right { transition: transform .35s ease, opacity .35s ease; }
+  #left.collapsed  { transform: translateX(calc(-100% - 20px)); opacity: 0; pointer-events: none !important; }
+  #right.collapsed { transform: translateX(calc(100% + 20px));  opacity: 0; pointer-events: none !important; }
+  .edgeTab {
+    position: fixed; top: 50%; transform: translateY(-50%); z-index: 30;
+    width: 24px; height: 72px;
+    background: var(--panel); border: 1px solid var(--line-strong);
+    color: var(--text-secondary); font-size: 13px; cursor: pointer;
+    backdrop-filter: blur(8px);
+  }
+  .edgeTab.left  { left: 0;  border-radius: 0 8px 8px 0; border-left: none; }
+  .edgeTab.right { right: 0; border-radius: 8px 0 0 8px; border-right: none; }
+  .edgeTab:hover { color: var(--hud); border-color: var(--hud); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .isl:hover .ring { animation: none; }
+    #stage { transition: none; transform: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+
+<!-- full-screen map, behind the HUD -->
+<main id="stageWrap">
+  <div id="stage">
+    <!-- preserveAspectRatio="none": fill full width & height below the navbar
+         (whole artwork always visible; swap to "xMidYMid meet" for undistorted fit) -->
+    <svg id="map" viewBox="0 0 1536 1024" preserveAspectRatio="none" role="group" aria-label="Marketing engine map"></svg>
+  </div>
+</main>
+
+<div id="app">
+  <header id="topbar" class="hud">
+    <div class="logo">AIE360</div>
+    <div class="sub">Marketing Engine · Command Center</div>
+    <div class="spacer"></div>
+    <span id="demoBadge">Offline · demo data</span>
+    <span id="enginePill" class="pill off"><span class="st"></span><span id="engineTxt">Engine…</span></span>
+    <span id="clock">--:--:--</span>
+  </header>
+
+  <!-- ============================ overview panel ============================ -->
+  <section id="left" class="panel" aria-label="Engine overview">
+    <div class="ptitle"><span class="dot"></span>Engine Overview
+      <button class="minBtn" aria-label="Minimize panel" title="Minimize">–</button></div>
+    <div class="pbody">
+      <div class="tiles">
+        <div class="tile"><div class="v" id="tProfiles">–</div><div class="k">Profiles online</div></div>
+        <div class="tile"><div class="v" id="tSessions">–</div><div class="k">Sessions</div></div>
+        <div class="tile"><div class="v" id="tMemories">–</div><div class="k">Memories</div></div>
+        <div class="tile"><div class="v" id="tDrafts">–</div><div class="k">Outbox drafts</div></div>
+      </div>
+
+      <div class="secHead">Outbox by channel</div>
+      <div id="outbox"></div>
+
+      <div class="secHead">Profiles — click to inspect</div>
+      <div id="pList"></div>
+    </div>
+  </section>
+
+  <!-- ============================ right panel ============================ -->
+  <section id="right" class="panel" aria-label="Activity and profile detail">
+    <div class="views">
+      <!-- activity feed -->
+      <div id="feedView" class="view show">
+        <div class="ptitle"><span class="dot"></span>Live Activity
+          <button class="minBtn" aria-label="Minimize panel" title="Minimize">–</button></div>
+        <div class="pbody" id="feed"></div>
+      </div>
+
+      <!-- profile detail -->
+      <div id="pv" class="view">
+        <div id="pvHead">
+          <button class="minBtn abs" aria-label="Minimize panel" title="Minimize">–</button>
+          <button id="pvBack" class="backBtn">◂ Overview</button>
+          <div id="pvName"><span class="chip"></span><span id="pvNameTxt"></span></div>
+          <div id="pvRole"></div>
+          <div id="pvMeta"></div>
+        </div>
+        <div class="pbody" id="pvBody"></div>
+      </div>
+
+      <!-- capability zone detail -->
+      <div id="zv" class="view">
+        <div class="ptitle"><span class="dot"></span>Capability Zone
+          <button class="minBtn" aria-label="Minimize panel" title="Minimize">–</button></div>
+        <div class="pbody">
+          <div id="zvCard">
+            <button id="zvBack" class="backBtn">◂ Overview</button>
+            <div id="zvName"></div>
+            <div id="zvDesc"></div>
+            <button class="routeBtn" id="zvRoute"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<button id="tabL" class="edgeTab left" aria-label="Toggle overview panel" title="Toggle overview panel">❮</button>
+<button id="tabR" class="edgeTab right" aria-label="Toggle activity panel" title="Toggle activity panel">❯</button>
+
+<div id="tt" role="tooltip"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   Island map — polygons in the 1536×1024 space of the background art.
+   6 islands are live hermes profiles; 4 are capability zones routed to
+   the profile that owns that part of the funnel.
+===================================================================== */
+const PROFILE_INFO = {
+  strategist: { role: 'Fractional CMO — calendars, campaign briefs, KPI framing', accent: '#1f9fc7' },
+  content:    { role: 'Insights posts, site & SEO copy — drives OpenCode',        accent: '#d55181' },
+  social:     { role: 'LinkedIn / X / YouTube drafts',                            accent: '#c98500' },
+  outreach:   { role: 'Email nurture + outbound sequences',                       accent: '#9085e9' },
+  seo:        { role: 'SEO & GEO audits and website changes',                     accent: '#199e70' },
+  analyst:    { role: 'Results analysis + feedback loop to all profiles',         accent: '#d95926' },
+};
+const PROFILE_ORDER = ['strategist', 'content', 'social', 'outreach', 'seo', 'analyst'];
+
+const ISLANDS = [
+  { id: 'strategy-hq',        label: 'Strategy HQ',        profile: 'strategist',
+    poly: '700,255 870,270 1020,330 1065,450 990,580 820,665 640,650 520,560 495,420 570,320' },
+  { id: 'content-marketing',  label: 'Content Marketing',  profile: 'content',
+    poly: '170,395 330,400 430,480 425,600 300,695 140,670 55,560 75,460' },
+  { id: 'social-media',       label: 'Social Media',       profile: 'social',
+    poly: '1230,70 1360,90 1470,170 1480,270 1370,345 1220,330 1140,240 1160,130' },
+  { id: 'email-marketing',    label: 'Email Marketing',    profile: 'outreach',
+    poly: '1240,385 1390,395 1490,470 1485,580 1370,670 1220,655 1130,560 1150,455' },
+  { id: 'seo-island',         label: 'SEO',                profile: 'seo',
+    poly: '310,580 460,610 560,720 555,840 430,950 270,930 165,830 190,690' },
+  { id: 'analytics',          label: 'Analytics',          profile: 'analyst',
+    poly: '880,35 1030,40 1110,120 1115,230 1000,325 860,310 800,210 815,100' },
+
+  { id: 'target-audience',    label: 'Target Audience',    zone: 'strategist',
+    desc: 'Audience & ICP definition. Owned by the Strategist — ask it for persona and targeting briefs.',
+    poly: '150,60 290,80 350,180 355,290 250,375 110,350 40,270 55,150' },
+  { id: 'digital-marketing',  label: 'Digital Marketing',  zone: 'strategist',
+    desc: 'Campaign amplification across paid & owned channels. Coordinated by the Strategist’s campaign briefs.',
+    poly: '480,55 620,60 700,150 710,260 600,355 450,340 385,240 400,120' },
+  { id: 'customer-engagement',label: 'Customer Engagement', zone: 'outreach',
+    desc: 'Conversations, nurture and community touchpoints. Powered by the Outreach profile’s sequences.',
+    poly: '680,695 820,710 900,790 895,900 790,1005 640,990 565,890 590,780' },
+  { id: 'conversion',         label: 'Conversion',         zone: 'analyst',
+    desc: 'Funnel performance, demo requests and revenue signals. Measured by the Analyst’s feedback loop.',
+    poly: '1000,635 1150,650 1255,730 1250,850 1140,955 980,935 890,830 915,720' },
+];
+
+const BG_CANDIDATES = ['bg.png', '../AI-marketing-engine-front.png']; // server route, then file:// fallback
+
+/* =============================================================== map */
+const SVGNS = 'http://www.w3.org/2000/svg';
+const map = document.getElementById('map');
+
+function el(name, attrs, parent) {
+  const n = document.createElementNS(SVGNS, name);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+
+function accentOf(isl) {
+  return isl.profile ? PROFILE_INFO[isl.profile].accent : 'var(--acc-zone)';
+}
+
+function buildMap(bgHref) {
+  map.textContent = '';
+  const defs = el('defs', {}, map);
+
+  // brightness/saturation boost for the hovered building
+  const boost = el('filter', { id: 'boost', x: '-5%', y: '-5%', width: '110%', height: '110%' }, defs);
+  el('feColorMatrix', { type: 'saturate', values: '1.4' }, boost);
+  const ct = el('feComponentTransfer', {}, boost);
+  for (const c of ['R', 'G', 'B']) el('feFunc' + c, { type: 'linear', slope: '1.38', intercept: '0.02' }, ct);
+
+  // soft neon glow for the outline ring
+  const glow = el('filter', { id: 'glow', x: '-40%', y: '-40%', width: '180%', height: '180%' }, defs);
+  el('feGaussianBlur', { in: 'SourceGraphic', stdDeviation: '7', result: 'b' }, glow);
+  const mrg = el('feMerge', {}, glow);
+  el('feMergeNode', { in: 'b' }, mrg);
+  el('feMergeNode', { in: 'b' }, mrg);
+  el('feMergeNode', { in: 'SourceGraphic' }, mrg);
+
+  el('image', { href: bgHref, x: 0, y: 0, width: 1536, height: 1024, preserveAspectRatio: 'xMidYMid slice' }, map);
+
+  for (const isl of ISLANDS) {
+    const clip = el('clipPath', { id: 'clip-' + isl.id }, defs);
+    el('polygon', { points: isl.poly }, clip);
+
+    const g = el('g', { class: 'isl', 'data-id': isl.id }, map);
+    const hl = el('g', { class: 'hl', 'clip-path': `url(#clip-${isl.id})` }, g);
+    el('image', { href: bgHref, x: 0, y: 0, width: 1536, height: 1024, filter: 'url(#boost)', preserveAspectRatio: 'xMidYMid slice' }, hl);
+
+    el('polygon', { class: 'ring', points: isl.poly, stroke: accentOf(isl), filter: 'url(#glow)' }, g);
+
+    const hit = el('polygon', {
+      class: 'hit', points: isl.poly, tabindex: '0', role: 'button',
+      'aria-label': isl.label + (isl.profile ? ` — ${isl.profile} profile` : ' — capability zone'),
+    }, g);
+
+    hit.addEventListener('click', () => select(isl));
+    hit.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(isl); } });
+    hit.addEventListener('pointermove', (e) => showTip(e, isl));
+    hit.addEventListener('pointerleave', hideTip);
+  }
+  applyHash();
+}
+
+// resolve which background URL loads (server route vs file://)
+(function pickBg(i) {
+  if (i >= BG_CANDIDATES.length) return buildMap(BG_CANDIDATES[0]);
+  const probe = new Image();
+  probe.onload = () => buildMap(BG_CANDIDATES[i]);
+  probe.onerror = () => pickBg(i + 1);
+  probe.src = BG_CANDIDATES[i];
+})(0);
+
+/* ======================================================== tooltip */
+const tt = document.getElementById('tt');
+function showTip(e, isl) {
+  const p = isl.profile && state.profiles[isl.profile];
+  tt.innerHTML =
+    `<div class="t1" style="color:${isl.profile ? PROFILE_INFO[isl.profile].accent : 'var(--text-primary)'}">${isl.label}</div>` +
+    `<div class="t2">${isl.profile ? PROFILE_INFO[isl.profile].role : isl.desc}</div>` +
+    (p ? `<div class="t3">${p.sessions ?? 0} sessions · ${p.memories ?? 0} memories · last active ${ago(p.lastActivity)}</div>`
+       : `<div class="t3">${isl.zone ? 'routed to ' + isl.zone : ''}</div>`);
+  tt.style.display = 'block';
+  const r = tt.getBoundingClientRect();
+  tt.style.left = Math.min(e.clientX + 16, innerWidth - r.width - 10) + 'px';
+  tt.style.top = Math.min(e.clientY + 16, innerHeight - r.height - 10) + 'px';
+}
+function hideTip() { tt.style.display = 'none'; }
+
+/* ==================================================== parallax tilt */
+const stage = document.getElementById('stage');
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (!reduceMotion) {
+  document.getElementById('stageWrap').addEventListener('pointermove', (e) => {
+    const dx = e.clientX / innerWidth - 0.5;
+    const dy = e.clientY / innerHeight - 0.5;
+    stage.style.transform = `rotateY(${dx * 3}deg) rotateX(${dy * -2.2}deg)`;
+  });
+  document.getElementById('stageWrap').addEventListener('pointerleave', () => {
+    stage.style.transform = 'none';
+  });
+}
+
+/* ======================================================= star field */
+(function stars() {
+  const cv = document.getElementById('stars');
+  const cx = cv.getContext('2d');
+  let pts = [];
+  function size() {
+    cv.width = innerWidth; cv.height = innerHeight;
+    pts = Array.from({ length: 140 }, () => ({
+      x: Math.random() * cv.width, y: Math.random() * cv.height,
+      r: Math.random() * 1.4 + .3, s: Math.random() * .25 + .05, p: Math.random() * Math.PI * 2,
+    }));
+  }
+  size(); addEventListener('resize', size);
+  (function frame(t) {
+    cx.clearRect(0, 0, cv.width, cv.height);
+    for (const p of pts) {
+      const a = .25 + .55 * Math.abs(Math.sin(t / 1900 + p.p));
+      cx.globalAlpha = a;
+      cx.fillStyle = '#9fc3ff';
+      cx.beginPath(); cx.arc(p.x, (p.y += p.s * .08) % cv.height, p.r, 0, 7); cx.fill();
+    }
+    if (!reduceMotion) requestAnimationFrame(frame);
+  })(0);
+})();
+
+/* ========================================================== data */
+const state = { profiles: {}, overview: null, demo: false, selected: null };
+
+const DEMO = (() => {
+  const now = Date.now();
+  const mk = (s, m, min) => ({ present: true, sessions: s, memories: m, lastActivity: now - min * 60000, model: 'deepseek-chat' });
+  return {
+    engine: { running: true },
+    profiles: [
+      { name: 'strategist', ...mk(14, 32, 12), model: 'deepseek-reasoner' },
+      { name: 'content',    ...mk(23, 41, 4) },
+      { name: 'social',     ...mk(18, 27, 41) },
+      { name: 'outreach',   ...mk(9, 15, 128) },
+      { name: 'seo',        ...mk(7, 12, 66) },
+      { name: 'analyst',    ...mk(5, 19, 210), model: 'deepseek-reasoner' },
+    ],
+    outbox: { social: 6, email: 4, calendar: 2, seo: 3, reports: 1 },
+    userCount: 4,
+    activity: [
+      { ts: new Date(now - 2 * 60000).toISOString(), level: 'INFO', source: 'content', logger: 'agent.conversation_loop', message: 'Turn ended: insights draft written to data/insights/agentic-seo.md' },
+      { ts: new Date(now - 9 * 60000).toISOString(), level: 'INFO', source: 'strategist', logger: 'agent.conversation_loop', message: 'Campaign brief “Q3 GEO push” framed with 3 KPIs' },
+      { ts: new Date(now - 16 * 60000).toISOString(), level: 'INFO', source: 'engine', logger: 'tui_gateway.ws', message: 'ws accepted peer=127.0.0.1' },
+      { ts: new Date(now - 31 * 60000).toISOString(), level: 'INFO', source: 'social', logger: 'agent.conversation_loop', message: '3 LinkedIn drafts staged in outbox/social' },
+      { ts: new Date(now - 55 * 60000).toISOString(), level: 'INFO', source: 'seo', logger: 'agent.conversation_loop', message: 'GEO audit pass: 12 pages scored, 4 fixes proposed' },
+      { ts: new Date(now - 88 * 60000).toISOString(), level: 'INFO', source: 'analyst', logger: 'agent.conversation_loop', message: 'Weekly report written to outbox/reports' },
+    ],
+  };
+})();
+
+const DEMO_PROFILE_EXTRAS = {
+  users: [
+    { name: 'Nigel', email: 'ajknigel360@gmail.com', role: 'Owner', permission: 'admin' },
+    { name: 'Ava Chen', email: 'ava@aiengines360.example', role: 'Marketing Lead', permission: 'operate' },
+  ],
+  skills: ['aie360-brand', 'ecc'],
+};
+
+async function fetchJSON(u) {
+  const r = await fetch(u, { cache: 'no-store' });
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+async function refresh() {
+  let ov;
+  try {
+    ov = await fetchJSON('/api/overview');
+    state.demo = false;
+  } catch {
+    ov = DEMO;
+    state.demo = true;
+  }
+  state.overview = ov;
+  state.profiles = Object.fromEntries(ov.profiles.map((p) => [p.name, p]));
+  document.getElementById('demoBadge').style.display = state.demo ? 'inline-block' : 'none';
+  renderOverview(ov);
+  if (!document.getElementById('feedView').classList.contains('show') && state.selected?.profile) {
+    // keep an open profile fresh
+    openProfile(state.selected.profile, true);
+  }
+}
+
+/* ======================================================= render */
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function ago(ts) {
+  if (!ts) return '—';
+  const ms = Date.now() - (typeof ts === 'number' ? ts : Date.parse(ts));
+  if (!isFinite(ms) || ms < 0) return '—';
+  const m = Math.round(ms / 60000);
+  if (m < 1) return 'now';
+  if (m < 60) return m + 'm ago';
+  const h = Math.round(m / 60);
+  if (h < 48) return h + 'h ago';
+  return Math.round(h / 24) + 'd ago';
+}
+
+function srcColor(src) {
+  return PROFILE_INFO[src] ? PROFILE_INFO[src].accent : '#5a6a9a';
+}
+
+function renderOverview(ov) {
+  const live = ov.profiles.filter((p) => p.present);
+  document.getElementById('tProfiles').textContent = `${live.length}/${ov.profiles.length}`;
+  document.getElementById('tSessions').textContent = live.reduce((a, p) => a + (p.sessions || 0), 0);
+  document.getElementById('tMemories').textContent = live.reduce((a, p) => a + (p.memories || 0), 0);
+  const draftTotal = Object.values(ov.outbox || {}).reduce((a, b) => a + b, 0);
+  document.getElementById('tDrafts').textContent = draftTotal;
+
+  const pill = document.getElementById('enginePill');
+  pill.className = 'pill ' + (ov.engine?.running ? 'on' : 'off');
+  document.getElementById('engineTxt').textContent = ov.engine?.running ? 'Engine online' : 'Engine offline';
+
+  // outbox bars (direct-labeled counts; single-hue magnitude)
+  const maxOb = Math.max(1, ...Object.values(ov.outbox || {}));
+  document.getElementById('outbox').innerHTML = Object.entries(ov.outbox || {})
+    .map(([k, v]) => `<div class="obRow"><span class="lbl">${esc(k)}</span>
+      <span class="bar"><i style="width:${(v / maxOb) * 100}%"></i></span>
+      <span class="n">${v}</span></div>`).join('') || '<div class="empty">outbox empty</div>';
+
+  // profile list
+  document.getElementById('pList').innerHTML = PROFILE_ORDER.map((name) => {
+    const p = state.profiles[name] || {};
+    const info = PROFILE_INFO[name];
+    return `<button class="pRow" data-p="${name}">
+      <span class="chip" style="background:${info.accent};box-shadow:0 0 8px ${info.accent}55"></span>
+      <span><div class="nm">${name}</div><div class="md">${esc(p.model || '—')}</div></span>
+      <span class="when">${p.present ? ago(p.lastActivity) : 'not created'}</span>
+    </button>`;
+  }).join('');
+  document.querySelectorAll('#pList .pRow').forEach((b) =>
+    b.addEventListener('click', () => {
+      const isl = ISLANDS.find((i) => i.profile === b.dataset.p);
+      select(isl || { profile: b.dataset.p, label: b.dataset.p });
+    }));
+
+  // feed
+  document.getElementById('feed').innerHTML = (ov.activity || []).map((a) => `
+    <div class="logRow">
+      <span class="lt">${esc((a.ts || '').slice(11, 16))}</span>
+      <span class="srcTag" style="color:${srcColor(a.source)};border-color:${srcColor(a.source)}66">${esc(a.source)}</span>
+      <span class="msg"><b>${esc(a.logger?.split('.').pop() || '')}</b> ${esc(a.message)}</span>
+    </div>`).join('') || '<div class="empty">no recent activity</div>';
+}
+
+/* =============================================== selection & panels */
+function showView(id) {
+  const right = document.getElementById('right');
+  if (right.classList.contains('min')) right.querySelector('.minBtn').click(); // new content restores the panel
+  for (const v of document.querySelectorAll('.view')) v.classList.toggle('show', v.id === id);
+}
+
+function markActive(islId) {
+  document.querySelectorAll('.isl').forEach((g) => g.classList.toggle('active', g.dataset.id === islId));
+}
+
+function select(isl) {
+  state.selected = isl;
+  markActive(isl.id);
+  if (isl.id) history.replaceState(null, '', '#' + isl.id);
+  if (isl.profile) openProfile(isl.profile);
+  else openZone(isl);
+}
+
+function applyHash() {
+  const isl = ISLANDS.find((i) => i.id === location.hash.slice(1));
+  if (isl) select(isl);
+}
+
+function backToFeed() {
+  state.selected = null;
+  markActive(null);
+  history.replaceState(null, '', location.pathname + location.search);
+  showView('feedView');
+}
+document.getElementById('pvBack').addEventListener('click', backToFeed);
+document.getElementById('zvBack').addEventListener('click', backToFeed);
+addEventListener('keydown', (e) => { if (e.key === 'Escape') backToFeed(); });
+
+function openZone(isl) {
+  document.getElementById('zvName').textContent = isl.label;
+  document.getElementById('zvDesc').textContent = isl.desc || '';
+  const btn = document.getElementById('zvRoute');
+  btn.textContent = `Open ${isl.zone} profile ▸`;
+  btn.onclick = () => {
+    const target = ISLANDS.find((i) => i.profile === isl.zone);
+    if (target) select(target);
+  };
+  showView('zv');
+}
+
+async function openProfile(name, silent) {
+  let d;
+  if (state.demo) {
+    d = { ...(state.profiles[name] || {}), name, ...DEMO_PROFILE_EXTRAS, activity: DEMO.activity.filter((a) => a.source === name) };
+  } else {
+    try { d = await fetchJSON('/api/profiles/' + name); }
+    catch { d = { ...(state.profiles[name] || {}), name, users: [], skills: [], activity: [] }; }
+  }
+  const info = PROFILE_INFO[name];
+  const pv = document.getElementById('pv');
+  pv.style.setProperty('--acc', info.accent);
+  document.getElementById('pvNameTxt').textContent = ISLANDS.find((i) => i.profile === name)?.label || name;
+  document.getElementById('pvRole').textContent = info.role;
+
+  const fresh = d.lastActivity && Date.now() - d.lastActivity < 30 * 60000;
+  document.getElementById('pvMeta').innerHTML =
+    `<span class="mtag acc">profile: ${esc(name)}</span>` +
+    `<span class="mtag">${esc(d.model || 'model —')}</span>` +
+    `<span class="mtag">${d.present === false ? 'not created' : fresh ? '● active' : 'idle · ' + ago(d.lastActivity)}</span>`;
+
+  const users = (d.users || []).map((u) => `
+    <div class="userRow">
+      <span class="avatar">${esc((u.name || '?').split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase())}</span>
+      <span><div class="un">${esc(u.name)}${u.sample ? ' <span style="color:var(--text-muted);font-size:9px">(sample)</span>' : ''}</div>
+      <div class="ue">${esc(u.email)} · ${esc(u.role || '')}</div></span>
+      <span class="perm ${esc(u.permission)}">${esc(u.permission)}</span>
+    </div>`).join('') || '<div class="empty">No users assigned — edit dashboard/users.json</div>';
+
+  const skills = (d.skills || []).length
+    ? `<div class="skillChips">${d.skills.map((s) => `<span class="sk">${esc(s)}</span>`).join('')}</div>`
+    : '<div class="empty">no skills synced</div>';
+
+  const act = (d.activity || []).slice(0, 25).map((a) => `
+    <div class="logRow">
+      <span class="lt">${esc((a.ts || '').slice(11, 16))}</span>
+      <span class="srcTag" style="color:${info.accent};border-color:${info.accent}66">${esc(a.level || '')}</span>
+      <span class="msg">${esc(a.message)}</span>
+    </div>`).join('') || '<div class="empty">no recent activity</div>';
+
+  document.getElementById('pvBody').innerHTML = `
+    <div class="tiles">
+      <div class="tile"><div class="v">${d.sessions ?? 0}</div><div class="k">Sessions</div></div>
+      <div class="tile"><div class="v">${d.memories ?? 0}</div><div class="k">Memories</div></div>
+      <div class="tile"><div class="v">${(d.skills || []).length}</div><div class="k">Skills</div></div>
+      <div class="tile"><div class="v">${(d.users || []).length}</div><div class="k">Users</div></div>
+    </div>
+    <div class="secHead">Users & permissions</div>
+    ${users}
+    <div class="secHead">Skills</div>
+    ${skills}
+    ${d.soul ? `<div class="secHead">Soul</div><details class="soul"><summary>SOUL.md excerpt</summary><pre>${esc(d.soul)}</pre></details>` : ''}
+    <div class="secHead">Recent activity</div>
+    ${act}`;
+
+  if (!silent) showView('pv');
+}
+
+/* ========================================================= clock */
+setInterval(() => {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-GB');
+}, 1000);
+
+if (location.search.includes('debug')) document.body.classList.add('debug');
+
+// edge tabs — collapse the side panels to enjoy the full map
+function bindTab(btnId, panelId, openCh, closedCh) {
+  const b = document.getElementById(btnId), p = document.getElementById(panelId);
+  b.addEventListener('click', () => {
+    b.textContent = p.classList.toggle('collapsed') ? closedCh : openCh;
+  });
+}
+bindTab('tabL', 'left', '❮', '❯');
+bindTab('tabR', 'right', '❯', '❮');
+
+// minimize buttons — collapse a panel down to its title bar
+document.querySelectorAll('.minBtn').forEach((b) =>
+  b.addEventListener('click', () => {
+    const panel = b.closest('.panel');
+    const min = panel.classList.toggle('min');
+    panel.querySelectorAll('.minBtn').forEach((x) => {
+      x.textContent = min ? '+' : '–';
+      x.title = x.ariaLabel = min ? 'Restore panel' : 'Minimize';
+    });
+  }));
+
+refresh();
+setInterval(refresh, 8000);
+</script>
+</body>
+</html>
