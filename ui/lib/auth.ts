@@ -16,7 +16,8 @@ import { findUserById, listUsers, createUser, UserRecord } from "./store";
 export function authorized(req: NextRequest, body?: any): boolean {
   const pw = envValue("ENGINE_AUTH_PASSWORD");
   const secret = envValue("ENGINE_WEBHOOK_SECRET");
-  if (!pw && !secret) return true; // fresh instance, wizard not run yet
+  const hasUsers = listUsers().length > 0;
+  if (!pw && !secret && !hasUsers) return true; // fresh instance, nothing configured yet
   const headerPw = req.headers.get("x-engine-password") || "";
   const headerSecret = req.headers.get("x-engine-secret") || "";
   const bodySecret = typeof body?.secret === "string" ? body.secret : "";
@@ -26,9 +27,12 @@ export function authorized(req: NextRequest, body?: any): boolean {
   if (agentToken && req.headers.get("x-engine-agent-token") === agentToken) return true;
   // A signed-in ADMIN passes every legacy gate (the Admin UI uses session
   // cookies, not the shared password header). Members must use the scoped
-  // multi-user routes (/api/chat) instead.
+  // multi-user routes (/api/chat) instead — these endpoints can run any
+  // profile and read the full audit feed.
   if (currentUser(req)?.role === "admin") return true;
-  if (!pw) return true; // secret set but no password -> UI stays open
+  // Once accounts exist, anonymous browser access is closed even if the
+  // legacy shared password was never configured.
+  if (!pw && !hasUsers) return true;
   return false;
 }
 

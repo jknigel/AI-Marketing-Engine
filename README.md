@@ -138,10 +138,55 @@ them.
 
 | URL                            | What                                                    |
 | ------------------------------ | ------------------------------------------------------- |
-| `http://localhost:3000`      | 3D command-center dashboard                             |
-| `http://localhost:3000/settings` | Configure keys, capabilities, brand & goals         |
-| `http://localhost:9119`      | Hermes agent dashboard (basic auth:`HERMES_DASHBOARD_USER` / `HERMES_DASHBOARD_PASSWORD`) |
+| `http://localhost:3000`      | Entry point — routes you to the right surface for your role |
+| `http://localhost:3000/dashboard` | 3D command center (admin)                          |
+| `http://localhost:3000/settings` | Keys, capabilities, brand & goals (admin)           |
+| `http://localhost:3000/login` | Sign in / create the first admin account               |
+| `http://localhost:3000/chat`  | Member workspace — chat with your assigned capabilities |
+| `http://localhost:3000/admin/users` | Admin console: users, assignments, overlays, connections, gateways, audit, usage |
+| `http://localhost:9119`      | Hermes agent dashboard (basic auth:`HERMES_DASHBOARD_USER` / `HERMES_DASHBOARD_PASSWORD`) — debug tool; shows only the single default agent home |
 | `http://localhost:5678`      | n8n editor (protected by n8n's own owner account, created on first visit) |
+
+## Multi-user: how you and your team use the engine
+
+The engine has two roles. **Admins** run the marketing department; **members** use the
+capabilities granted to them, in isolation.
+
+**First boot (you, the owner):**
+
+1. Open `http://localhost:3000` → you land on the dashboard (a fresh instance has no
+   accounts and stays open, localhost-first).
+2. Go to **/login → Create admin account**. From that moment every surface requires
+   sign-in: the dashboard and Settings become admin-only, members get `/chat`.
+3. In **Settings**, pick your LLM provider, paste keys, enable capabilities, set brand
+   & goals — this materializes the golden agent for each enabled capability.
+
+**Managing your team (Admin console, `/admin`):**
+
+- **Users** — create accounts (or let OIDC SSO auto-provision them), set roles,
+  disable/delete, and record each user's messaging platform IDs (their Slack member
+  ID, Telegram ID, …) for gateway access.
+- **Assignments** — grant a user a capability. This is the multi-user core: each
+  (user, capability) pair gets its own composed agent under
+  `workspace/.hermes/<profile>__<user>/` with private memory and outputs, and the
+  user's platform IDs are allowlisted on that capability's messaging gateway.
+  Revoking blocks access immediately.
+- **Overlays** — per-user templates and preference files (e.g. "always write in UK
+  English") that are appended to that user's composed agents.
+- **Connections** — per-user third-party credentials, encrypted at rest. Where a
+  user has a connection (their own Resend key, Slack user token…), their runs use
+  *their* identity instead of the engine-level key.
+- **Gateways** — enable Slack/Telegram/Discord bots per capability (one bot per
+  capability). Only assigned users' platform IDs get responses.
+- **Audit / Usage** — every action tagged with the acting user; monthly per-user,
+  per-capability run counts and durations.
+
+**Your members' experience:** sign in at `/login` (password or SSO) → land on
+`/chat` → pick one of *their* assigned capabilities → work with it. Their
+conversations, memory, preferences and outputs are private to their account — two
+members assigned the same capability are talking to two fully independent agents.
+Optionally they can message the capability's bot on Slack/Telegram/Discord instead;
+per-sender isolation there is native to Hermes.
 
 ### Accessing Hermes
 

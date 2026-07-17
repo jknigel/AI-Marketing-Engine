@@ -14,10 +14,13 @@ type Profile = {
   missing_keys: string[]; missing_optional: string[];
 };
 type State = {
+  me?: { id: string; email: string; name: string; role: "admin" | "member" } | null;
   mode: string; engineName: string; config: any; profiles: Profile[];
   n8n: { healthy: boolean; workflows: { id: string; name: string; active: boolean }[] };
   audit: string[]; caps: { daily: string; monthly: string };
 };
+
+const CATEGORY_ORDER = ["foundation", "acquisition", "conversion", "retention", "ops"];
 
 const PROFILE_INFO: Record<string, { role: string; accent: string }> = {
   "brand-strategist": { role: "Brand positioning, personas, voice & messaging — every profile reads it first", accent: "#1f9fc7" },
@@ -239,6 +242,24 @@ export default function Dashboard() {
       $("#engineTxt").textContent = s.n8n?.healthy ? "n8n online" : "n8n offline";
       $("#engineName").textContent = s.engineName || "AI Marketing Engine";
 
+      // session-aware nav: admins get the Admin console; anonymous gets Sign in
+      const adminLink = $("#navAdmin"), who = $("#navWho");
+      if (s.me) {
+        who.textContent = `${s.me.email} · sign out`;
+        who.setAttribute("title", "Sign out");
+        who.onclick = async (e) => {
+          e.preventDefault();
+          await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+          location.href = "/login";
+        };
+        adminLink.style.display = s.me.role === "admin" ? "" : "none";
+      } else {
+        who.textContent = "Sign in";
+        who.setAttribute("href", "/login?next=/dashboard");
+        who.onclick = null;
+        adminLink.style.display = "none";
+      }
+
       // island rings reflect enabled state
       root.querySelectorAll(".isl").forEach((g) => {
         const id = (g as HTMLElement).dataset.id!;
@@ -247,18 +268,34 @@ export default function Dashboard() {
         g.classList.toggle("on", !!p && p.enabled);
       });
 
-      // profile list
-      $("#pList").innerHTML = ISLANDS.filter((i) => "profile" in i).map((isl: any) => {
-        const p = s.profiles.find((x) => x.id === isl.profile);
-        const st = statusOf(p);
-        const info = PROFILE_INFO[isl.profile];
-        return `<button class="pRow" data-id="${isl.id}">
-          <span class="chip" style="background:${info.accent};box-shadow:0 0 8px ${info.accent}55"></span>
-          <span><div class="nm">${esc(isl.label)}</div><div class="md">${esc(isl.profile)}</div></span>
-          <span class="when st-${st.k}">${st.label}</span></button>`;
-      }).join("");
+      // profile list — ALL enabled capabilities, grouped by funnel category.
+      // (The map above stays a 6-island visual; this list is the real inventory.)
+      const grouped = new Map<string, Profile[]>();
+      for (const p of live) {
+        const c = CATEGORY_ORDER.includes(p.category) ? p.category : "other";
+        if (!grouped.has(c)) grouped.set(c, []);
+        grouped.get(c)!.push(p);
+      }
+      const cats = [...CATEGORY_ORDER, "other"].filter((c) => grouped.has(c));
+      $("#pList").innerHTML = cats.map((cat) =>
+        `<div class="hsec">${esc(cat)}</div>` +
+        grouped.get(cat)!.map((p) => {
+          const st = statusOf(p);
+          const isl = ISLANDS.find((i: any) => i.profile === p.id);
+          const accent = PROFILE_INFO[p.id]?.accent || "var(--hud)";
+          return `<button class="pRow" data-pid="${esc(p.id)}" ${isl ? `data-id="${isl.id}"` : ""}>
+            <span class="chip" style="background:${accent};box-shadow:0 0 8px ${accent}55"></span>
+            <span><div class="nm">${esc(isl?.label || p.name)}</div><div class="md">${esc(p.id)}</div></span>
+            <span class="when st-${st.k}">${st.label}</span></button>`;
+        }).join("")
+      ).join("");
       $("#pList").querySelectorAll(".pRow").forEach((b) =>
-        b.addEventListener("click", () => select(ISLANDS.find((i) => i.id === (b as HTMLElement).dataset.id))));
+        b.addEventListener("click", () => {
+          const islId = (b as HTMLElement).dataset.id;
+          const isl = islId && ISLANDS.find((i) => i.id === islId);
+          if (isl) select(isl);
+          else openProfile((b as HTMLElement).dataset.pid!);
+        }));
 
       // activity feed
       $("#feed").innerHTML = s.audit.length
@@ -375,7 +412,10 @@ export default function Dashboard() {
           <div className="spacer" />
           <button id="approvalsBtn" className="cmdToggle">Approvals · <span id="tApprovals">0</span></button>
           <span id="enginePill" className="pill off"><span className="st" /><span id="engineTxt">engine…</span></span>
+          <a className="gearBtn" href="/chat">💬 Chat</a>
+          <a className="gearBtn" id="navAdmin" href="/admin/users" style={{ display: "none" }}>👥 Admin</a>
           <a className="gearBtn" href="/settings">⚙ Settings</a>
+          <a className="gearBtn" id="navWho" href="/login">…</a>
           <span id="clock">--:--:--</span>
         </header>
 

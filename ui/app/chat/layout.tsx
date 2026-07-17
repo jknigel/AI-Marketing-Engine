@@ -21,9 +21,14 @@ export default async function ChatLayout({ children }: { children: React.ReactNo
         </div>
         <div className="row">
           {user.role === "admin" && (
-            <Link href="/admin/users" className="small">
-              Admin
-            </Link>
+            <>
+              <Link href="/dashboard" className="small">
+                Dashboard
+              </Link>
+              <Link href="/admin/users" className="small">
+                Admin
+              </Link>
+            </>
           )}
           <LogoutButton />
         </div>
