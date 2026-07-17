@@ -50,7 +50,9 @@ export function writeEnvValues(values: Record<string, string>) {
   });
   const appended = Object.entries(remaining).map(([k, v]) => `${k}=${v}`);
   const next = [...lines, ...(appended.length ? ["", "# --- added from Settings ---", ...appended] : [])].join("\n");
-  fs.writeFileSync(ENV_PATH, next);
+  // Always end with a newline so external appends (scripts, `echo >>`) can't
+  // concatenate onto the last key and corrupt it.
+  fs.writeFileSync(ENV_PATH, next.endsWith("\n") ? next : next + "\n");
   for (const [k, v] of Object.entries(values)) process.env[k] = v;
 }
 

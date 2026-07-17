@@ -24,7 +24,7 @@ services:
       - ./workspace/.opencode:/root/.local/share/opencode # opencode session state survives restarts
     depends_on:
       n8n:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "sh", "/app/docker/healthcheck.sh"]
       interval: 30s
@@ -59,6 +59,14 @@ services:
       - HERMES_DASHBOARD_BASIC_AUTH_SECRET=${HERMES_DASHBOARD_SECRET:-please-change-me-32-bytes-minimum-secret}
     ports:
       - "127.0.0.1:9119:9119" # host-localhost only; it reads/writes .env (keys)
+    healthcheck:
+      # TCP-level check: a 401 from the auth gate still proves the server is up,
+      # so don't use `curl -f` here.
+      test: ["CMD", "sh", "-c", "curl -s -o /dev/null http://localhost:9119/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     volumes:
       # Manage the same keys the engine uses. (We do NOT mount over all of
       # /root/.hermes — that would hide the Hermes install baked into the image.)
@@ -67,19 +75,27 @@ services:
     restart: unless-stopped
 
   n8n:
-    image: n8nio/n8n:latest
+    # Pinned: `latest` can change key/config handling under us. To bump, pick a
+    # tag from https://hub.docker.com/r/n8nio/n8n/tags and test a fresh `up`.
+    image: n8nio/n8n:2.31.2
     ports:
-      - "5678:5678" # n8n editor UI (inspect/tweak workflows)
+      - "5678:5678" # n8n editor UI (inspect/tweak workflows; n8n's own owner account protects it)
     env_file: .env # workflows read keys via $env expressions (single source of truth)
     environment:
-      - N8N_BASIC_AUTH_ACTIVE=true
-      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-changeme}
+      # Blank/unset = n8n generates a key on first boot and persists it in
+      # /home/node/.n8n/config (-> ./workspace/n8n). That persisted key is the
+      # single source of truth — nothing may write this var afterwards.
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-}
       - GENERIC_TIMEZONE=${ENGINE_TIMEZONE:-UTC}
       - N8N_DIAGNOSTICS_ENABLED=false
     volumes:
       - ./workspace/n8n:/home/node/.n8n # workflow DB + credentials persist
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -q -O /dev/null http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
 
   # Optional at scale: postgres for n8n + KPI ledger.

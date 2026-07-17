@@ -141,7 +141,7 @@ them.
 | `http://localhost:3000`      | 3D command-center dashboard                             |
 | `http://localhost:3000/settings` | Configure keys, capabilities, brand & goals         |
 | `http://localhost:9119`      | Hermes agent dashboard (basic auth:`HERMES_DASHBOARD_USER` / `HERMES_DASHBOARD_PASSWORD`) |
-| `http://localhost:5678`      | n8n editor (basic auth:`N8N_USER` / `N8N_PASSWORD`) |
+| `http://localhost:5678`      | n8n editor (protected by n8n's own owner account, created on first visit) |
 
 ### Accessing Hermes
 
@@ -159,10 +159,19 @@ docker compose exec engine hermes --version     # confirm it's installed
 docker compose exec engine hermes --help        # all commands
 docker compose exec engine hermes chat "hello"  # one-off agent turn
 ```
-If the dashboard reports missing web dependencies, install them once in the container:
-```bash
-docker compose exec engine sh -lc "cd /usr/local/lib/hermes-agent && uv pip install -e '.[web,pty]'"
-```
+The dashboard's web dependencies and its browser UI are built into the image at
+`docker build` time — a fresh clone needs no manual install steps.
+
+### Why is there no `hermes/` folder in the repo?
+
+Hermes agent homes are **materialized at runtime**, not committed. The sources of
+truth are `profiles/*.profile.md` (persona + manifest) and the `os/` layer (rules,
+hooks, skills); when you save Settings, the engine writes each enabled profile to
+`workspace/.hermes/<profileId>/` as a native `HERMES_HOME` (SOUL.md, config.yaml,
+scoped .env, skills/, memories/) — see `ui/lib/profiles.ts:materializeProfile`.
+`workspace/` is gitignored and created on first boot. This keeps golden profiles
+regenerable and per-instance state out of git, and it is the foundation of the
+multi-user Golden Profile model (see `DEVELOPMENT_PLAN.md`).
 
 ## Troubleshooting
 
@@ -179,6 +188,11 @@ docker compose exec engine sh -lc "cd /usr/local/lib/hermes-agent && uv pip inst
 - **`hermes not available` when running a command locally** — the Hermes agent CLI is
   installed inside the container image. Run the engine via `docker compose`, not
   `next dev`, to execute profile tasks.
+- **n8n exits with "Mismatching encryption keys"** — `.env`'s `N8N_ENCRYPTION_KEY`
+  differs from the key n8n persisted in `workspace/n8n/config` on its first boot (the
+  persisted one is correct — it encrypted the stored credentials). The engine
+  entrypoint now heals `.env` automatically on start; then recreate n8n once:
+  `docker compose up -d --force-recreate n8n`. Never edit this key after first boot.
 - **Shell script errors (`bad interpreter`, `\r`)** — ensure the `.sh` files kept LF line
   endings (the repo's `.gitattributes` enforces this); re-clone if your Git converted them
   to CRLF.
@@ -203,6 +217,13 @@ the compiled UI) live in the image.
 
 ## Updating the template pin
 
-The Dockerfile installs the latest Hermes agent via the official install script and
-Opencode CLI via npm at build time. Rebuild (`docker compose build --no-cache engine`)
-to pick up new versions.
+The Dockerfile installs a **pinned** Hermes agent release (`HERMES_VERSION` build arg,
+currently `v2026.7.7.2`) via the official install script, and Opencode CLI via npm.
+To try a newer Hermes:
+
+```bash
+docker compose build --build-arg HERMES_VERSION=v2026.x.y engine   # or =main
+```
+
+The n8n image is pinned in `docker-compose.yml` (`n8nio/n8n:<tag>`); bump the tag and
+test a fresh `docker compose up` before committing.

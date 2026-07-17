@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { listProfiles, readConfig, keyStatus } from "@/lib/profiles";
 import { envValue } from "@/lib/env";
 import { n8nHealthy, listWorkflows } from "@/lib/n8n";
-import { authorized, unauthorized } from "@/lib/auth";
+import { authorized, currentUser, unauthorized } from "@/lib/auth";
 import { readAudit } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,9 @@ export async function GET(req: NextRequest) {
     };
   });
   const workflows = await listWorkflows().catch(() => []);
+  const me = currentUser(req);
   return NextResponse.json({
+    me: me ? { id: me.id, email: me.email, name: me.name, role: me.role } : null,
     mode: envValue("ENGINE_MODE") || "run",
     engineName: cfg?.instanceName || envValue("ENGINE_NAME") || "",
     hermesModel: envValue("HERMES_MODEL") || "anthropic/claude-opus-4-8",

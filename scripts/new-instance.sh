@@ -16,7 +16,10 @@ if [ -f .env ]; then
   echo ".env already exists — refusing to overwrite. Delete it first if you really want a reset."
 else
   cp .env.example .env
-  # Name the instance and generate secrets
+  # Name the instance and generate secrets.
+  # N8N_ENCRYPTION_KEY: safe to set here ONLY because this runs before the first
+  # `docker compose up` — n8n adopts and persists whatever key it sees on first
+  # boot (workspace/n8n/config). Never change it after that first boot.
   WEBHOOK_SECRET=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
   AGENT_TOKEN=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
   N8N_KEY=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')

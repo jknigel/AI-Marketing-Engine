@@ -138,13 +138,26 @@ function osSoulSection(skills: { slug: string }[]): string {
   return parts.length ? "\n\n---\n\n" + parts.join("\n\n---\n\n") + "\n" : "";
 }
 
+export type MaterializeOpts = {
+  /** Target HERMES_HOME (default: the golden home workspace/.hermes/<id>). */
+  home?: string;
+  /** Extra markdown appended to SOUL.md (e.g. per-user preferences overlay). */
+  soulAppend?: string;
+  /** Extra lines appended to the scoped .env (e.g. USER_ID / overlay dirs). */
+  envAppend?: string[];
+};
+
 /**
  * Materialize a profile into a Hermes-native HERMES_HOME directory:
  * SOUL.md (persona + engine OS rules), config.yaml (model), .env (only this
  * profile's keys), skills/ (os/skills targeted at this profile).
+ *
+ * With no opts this writes the GOLDEN home (workspace/.hermes/<id>) and must
+ * stay the only writer of golden homes. The multi-user composer
+ * (lib/compose.ts) passes opts to derive per-(user,profile) homes.
  */
-export function materializeProfile(p: ProfileMeta, engineName: string) {
-  const home = path.join(HERMES_HOMES, p.id);
+export function materializeProfile(p: ProfileMeta, engineName: string, opts: MaterializeOpts = {}) {
+  const home = opts.home ?? path.join(HERMES_HOMES, p.id);
   fs.mkdirSync(path.join(home, "memories"), { recursive: true });
   fs.mkdirSync(path.join(home, "skills"), { recursive: true });
 
@@ -156,7 +169,7 @@ export function materializeProfile(p: ProfileMeta, engineName: string) {
   }
 
   const persona = p.body.replaceAll("{{ENGINE_NAME}}", engineName || "this brand");
-  fs.writeFileSync(path.join(home, "SOUL.md"), persona + osSoulSection(skills));
+  fs.writeFileSync(path.join(home, "SOUL.md"), persona + osSoulSection(skills) + (opts.soulAppend ?? ""));
 
   const model = p.model === "default" ? envValue("HERMES_MODEL") || "anthropic/claude-opus-4-8" : p.model;
   fs.writeFileSync(
@@ -174,6 +187,7 @@ export function materializeProfile(p: ProfileMeta, engineName: string) {
   scoped.push(`ENGINE_API_URL=${envValue("ENGINE_API_URL") || "http://localhost:3000"}`);
   const agentToken = envValue("ENGINE_AGENT_TOKEN");
   if (agentToken) scoped.push(`ENGINE_AGENT_TOKEN=${agentToken}`);
+  if (opts.envAppend?.length) scoped.push(...opts.envAppend);
   fs.writeFileSync(path.join(home, ".env"), scoped.join("\n") + "\n");
   return home;
 }

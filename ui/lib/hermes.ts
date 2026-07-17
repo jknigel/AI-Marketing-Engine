@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { HERMES_HOMES, WORKSPACE } from "./paths";
 import { audit } from "./audit";
+import { recordUsage, parseTokens, UsageRecord } from "./usage";
 
 export type RunResult = {
   runId: string;
@@ -14,13 +15,27 @@ export type RunResult = {
   finishedAt: string;
 };
 
+export type RunOpts = {
+  timeoutMs?: number;
+  /**
+   * HERMES_HOME override for the run. Default: the golden home
+   * workspace/.hermes/<profileId>. The multi-user chat path passes a composed
+   * per-(user,profile) home (lib/compose.ts) here.
+   */
+  home?: string;
+  /** Acting user (tags audit + usage); null/absent = machine callers. */
+  userId?: string | null;
+  source?: UsageRecord["source"];
+};
+
 /**
  * Run a task on a profile via Hermes CLI:
- *   HERMES_HOME=workspace/.hermes/<id> hermes chat "<task>"
+ *   HERMES_HOME=<home> hermes chat "<task>"
  * Output is captured to workspace/runs/<runId>.json and returned.
+ * Every run is also recorded to workspace/usage/ (JSONL).
  */
-export async function runProfileTask(profileId: string, task: string, timeoutMs = 10 * 60 * 1000): Promise<RunResult> {
-  const home = path.join(HERMES_HOMES, profileId);
+export async function runProfileTask(profileId: string, task: string, opts: RunOpts = {}): Promise<RunResult> {
+  const { timeoutMs = 10 * 60 * 1000, home = path.join(HERMES_HOMES, profileId), userId = null, source = "api" } = opts;
   const runId = `${profileId}-${Date.now()}`;
   const startedAt = new Date().toISOString();
 
@@ -57,6 +72,7 @@ export async function runProfileTask(profileId: string, task: string, timeoutMs 
     });
   });
 
+  const finishedAt = new Date().toISOString();
   const res: RunResult = {
     runId,
     profile: profileId,
@@ -64,10 +80,24 @@ export async function runProfileTask(profileId: string, task: string, timeoutMs 
     ok: output.ok,
     output: output.text,
     startedAt,
-    finishedAt: new Date().toISOString(),
+    finishedAt,
   };
   persist(res);
-  audit(`run ${res.ok ? "ok" : "FAILED"} profile=${profileId} runId=${runId} task="${task.slice(0, 120)}"`);
+  try {
+    recordUsage({
+      ts: startedAt,
+      userId,
+      profileId,
+      runId,
+      ok: res.ok,
+      durationMs: Date.parse(finishedAt) - Date.parse(startedAt),
+      source,
+      tokens: parseTokens(output.text),
+    });
+  } catch {
+    /* usage tracking must never break a run */
+  }
+  audit(`run ${res.ok ? "ok" : "FAILED"} profile=${profileId} runId=${runId} task="${task.slice(0, 120)}"`, userId ?? undefined);
   return res;
 }
 

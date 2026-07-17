@@ -50,23 +50,41 @@ RUN for i in 1 2 3; do \
 # retry a few times, then verify the binary exists so a broken install fails the
 # build loudly instead of silently shipping an engine that can't run agents.
 ENV HERMES_HOME=/root/.hermes
+# Pinned release tag — reproducible builds. Override for newer:
+#   docker compose build --build-arg HERMES_VERSION=v2026.x.y   (or =main)
+ARG HERMES_VERSION=v2026.7.7.2
 RUN git config --global http.postBuffer 1048576000 \
     && git config --global http.lowSpeedLimit 0 \
     && git config --global http.lowSpeedTime 999 \
     && git config --global core.compression 0
 RUN for i in 1 2 3; do \
       echo "hermes install attempt $i" && \
-      curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --skip-setup && break || \
+      curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --skip-setup --branch "${HERMES_VERSION}" && break || \
       { echo "attempt $i failed; retrying" && rm -rf /usr/local/lib/hermes-agent "$HERMES_HOME/hermes-agent" && sleep 5; }; \
     done \
     && command -v hermes && hermes --version
 
 # `hermes dashboard` (the web UI) needs the [web,pty] extras (FastAPI/Uvicorn).
-# Best-effort — if it can't resolve the venv here, the README shows the one-liner
-# to run inside the container; the core `hermes` binary above is the hard gate.
+# Fatal on purpose: a warning here only moves the failure to first dashboard start.
+# The installer's venv lives at <repo>/venv — uv must be pointed at it
+# explicitly (no VIRTUAL_ENV is set during docker build).
 RUN cd /usr/local/lib/hermes-agent \
-    && /root/.hermes/bin/uv pip install -e ".[web,pty]" \
-    || echo "WARN: hermes web extras not installed at build time — run: cd /usr/local/lib/hermes-agent && uv pip install -e '.[web,pty]'"
+    && /root/.hermes/bin/uv pip install --python venv/bin/python -e ".[web,pty]"
+
+# Pre-build the dashboard's Node web UI so `hermes dashboard` never npm-installs
+# at container start (there NODE_ENV=production would omit devDependencies and
+# the build dies with `tsc: not found`, crash-looping the hermes service).
+# Building right after the clone means the Vite manifest in hermes_cli/web_dist
+# is always newer than the sources, so the runtime staleness check never fires.
+# --include=dev keeps this correct even if an env change moves the step below
+# the NODE_ENV=production line.
+RUN cd /usr/local/lib/hermes-agent \
+    && for i in 1 2 3; do \
+         npm install --workspace web --include=dev --no-audit --no-fund && break || \
+         { echo "web npm install attempt $i failed; retrying" && sleep 10; }; \
+       done \
+    && npm run build -w web \
+    && test -f hermes_cli/web_dist/index.html
 
 WORKDIR /app
 

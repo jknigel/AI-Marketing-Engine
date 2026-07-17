@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
 
   const results = [];
   for (const p of due) {
-    const r = await runProfileTask(p.id, CADENCE_TASK[cadence]);
+    const r = await runProfileTask(p.id, CADENCE_TASK[cadence], { source: "schedule" });
     results.push({ profile: p.id, ok: r.ok, runId: r.runId });
   }
   return NextResponse.json({ cadence, ran: results });

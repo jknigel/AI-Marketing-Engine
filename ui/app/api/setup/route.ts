@@ -42,7 +42,10 @@ export async function POST(req: NextRequest) {
   // Secrets are generated once and then left alone.
   if (!envValue("ENGINE_WEBHOOK_SECRET")) envUpdates.ENGINE_WEBHOOK_SECRET = crypto.randomBytes(24).toString("hex");
   if (!envValue("ENGINE_AGENT_TOKEN")) envUpdates.ENGINE_AGENT_TOKEN = crypto.randomBytes(24).toString("hex");
-  if (!envValue("N8N_ENCRYPTION_KEY")) envUpdates.N8N_ENCRYPTION_KEY = crypto.randomBytes(24).toString("hex");
+  // N8N_ENCRYPTION_KEY is deliberately NOT generated here: n8n owns that key.
+  // It self-generates one on first boot and persists it in workspace/n8n/config;
+  // writing a different value into .env afterwards makes n8n refuse to start
+  // ("Mismatching encryption keys").
   writeEnvValues(envUpdates);
 
   // 2. Resolve the enabled set (only touch it if the caller sent one).

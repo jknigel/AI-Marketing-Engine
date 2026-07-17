@@ -1,0 +1,15 @@
+# Keep the Docker build context small and deterministic — the image builds the
+# UI itself from source (Dockerfile stage 1), so local build artifacts and
+# instance data must never leak into the context.
+.git
+.env
+workspace/
+ui/node_modules/
+ui/.next/
+ui/tsconfig.tsbuildinfo
+*.png
+DEVELOPMENT_PLAN.md
+feature-request-1.md
+MASTER_SPEC.md
+README.md
+.devcontainer/
