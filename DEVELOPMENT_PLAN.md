@@ -1,9 +1,13 @@
 # Development Plan — Docker Build Reliability & Multi-User Orchestration
 
-> Status: **Phases 0–4 implemented** (2026-07-17). This document is the working plan for
+> Status: **Phases 0–5 implemented** (2026-07-17). This document is the working plan for
 > (1) fixing the fresh-clone Docker build and (2) implementing the multi-user
 > architecture specified in `feature-request-1.md`, adapted to how Hermes actually works.
-> Phase 5 (per-user outbound credentials, SSO, postgres scale path) remains open.
+> Phase 5 shipped per-user encrypted credentials (`ui/lib/credentials.ts`,
+> Admin → Connections, composer `envOverrides` merge) and optional OIDC SSO
+> (`ui/lib/oidc.ts`, `/api/auth/oidc*`, auto-provisioning). Still open: provider
+> OAuth *connect flows* (users click-through instead of pasting tokens) and the
+> optional postgres storage backend.
 >
 > Implementation deviation from the original design: page gating uses **server
 > layouts** (`ui/app/admin/layout.tsx`, `ui/app/chat/layout.tsx`) instead of
@@ -306,10 +310,14 @@ Accept: uploaded template appears in the user's next composed run;
 path-traversal attempts (`../`, absolute, encoded) rejected, with tests; audit
 filterable by user/profile; usage charts per user/profile/month.
 
-### Phase 5 (deferred) — outbound credentials, SSO, scale
-Encrypted per-user `credentials/` + OAuth connect flows (spec §4.4/§5); composer
-merges per-user credential keys into pair `.env`; OIDC SSO replacing local
-passwords; optional postgres behind `store.ts`.
+### Phase 5 — outbound credentials + SSO (implemented), scale (open)
+Implemented: encrypted per-user `credentials/` (AES-256-GCM, `ENGINE_CREDENTIALS_KEY`,
+write-only API with masked listings, Admin → Connections); composer merges the
+decrypted pairs into the pair `.env` as **overrides** so a user's runs act with
+their own third-party identity; optional OIDC SSO (issuer discovery, PKCE,
+auto-provisioning — first user of an empty instance becomes admin).
+Open: provider OAuth connect flows (spec §5.2 click-through onboarding) and the
+optional postgres backend behind `store.ts`.
 
 ---
 

@@ -145,6 +145,12 @@ export type MaterializeOpts = {
   soulAppend?: string;
   /** Extra lines appended to the scoped .env (e.g. USER_ID / overlay dirs). */
   envAppend?: string[];
+  /**
+   * Key/value pairs that OVERRIDE golden/service-level values in the scoped
+   * .env (per-user credentials, DEVELOPMENT_PLAN.md P5): a matching scoped key
+   * is replaced, unmatched keys are appended.
+   */
+  envOverrides?: Record<string, string>;
 };
 
 /**
@@ -188,6 +194,13 @@ export function materializeProfile(p: ProfileMeta, engineName: string, opts: Mat
   const agentToken = envValue("ENGINE_AGENT_TOKEN");
   if (agentToken) scoped.push(`ENGINE_AGENT_TOKEN=${agentToken}`);
   if (opts.envAppend?.length) scoped.push(...opts.envAppend);
+  if (opts.envOverrides) {
+    for (const [k, v] of Object.entries(opts.envOverrides)) {
+      const idx = scoped.findIndex((l) => l.startsWith(k + "="));
+      if (idx >= 0) scoped[idx] = `${k}=${v}`;
+      else scoped.push(`${k}=${v}`);
+    }
+  }
   fs.writeFileSync(path.join(home, ".env"), scoped.join("\n") + "\n");
   return home;
 }

@@ -3,6 +3,7 @@ import path from "node:path";
 import { HERMES_HOMES } from "./paths";
 import { listProfiles, materializeProfile, readConfig, ProfileMeta } from "./profiles";
 import { userOverlayDir, ensureUserDirs } from "./store";
+import { allUserCredentialPairs } from "./credentials";
 
 /**
  * Overlay composition (DEVELOPMENT_PLAN.md D1): merge the read-only Golden
@@ -44,13 +45,21 @@ function mtime(p: string): number {
   }
 }
 
-/** A pair home is stale when the golden SOUL or the user's preferences are newer. */
+/**
+ * A pair home is stale when the golden SOUL, the user's preferences, or the
+ * user's encrypted credentials are newer than the last composition (SOUL.md
+ * and .env are written together, so SOUL's mtime dates the whole home).
+ */
 export function needsRecompose(profileId: string, userId: string): boolean {
   const composedSoul = path.join(pairHome(profileId, userId), "SOUL.md");
   if (!fs.existsSync(composedSoul)) return true;
   const composedAt = mtime(composedSoul);
   const goldenSoul = path.join(HERMES_HOMES, profileId, "SOUL.md");
-  const sources = [goldenSoul, ...preferenceFiles(userId, profileId)];
+  const credDir = path.join(userOverlayDir(userId), "credentials");
+  const credFiles = fs.existsSync(credDir)
+    ? fs.readdirSync(credDir).filter((f) => f.endsWith(".enc.json")).map((f) => path.join(credDir, f))
+    : [];
+  const sources = [goldenSoul, ...preferenceFiles(userId, profileId), ...credFiles];
   return sources.some((f) => mtime(f) > composedAt);
 }
 
@@ -69,8 +78,10 @@ export function composeUserProfile(profile: ProfileMeta, userId: string): string
       `USER_ID=${userId}`,
       `USER_TEMPLATES_DIR=${path.join(overlay, "templates")}`,
       `USER_OUTPUTS_DIR=${path.join(overlay, "outputs")}`,
-      // Phase 5 seam: merge decrypted per-user credential keys here.
     ],
+    // Per-user credentials override golden/service-level keys: the user's
+    // runs act with THEIR third-party identity wherever they connected one.
+    envOverrides: allUserCredentialPairs(userId),
   });
   return home;
 }
@@ -82,6 +93,26 @@ export function ensureComposed(profileId: string, userId: string): string | null
   const home = pairHome(profileId, userId);
   if (needsRecompose(profileId, userId)) return composeUserProfile(profile, userId);
   return home;
+}
+
+/** Re-compose every existing pair home for a user (after credential changes,
+ * where a DELETED file leaves no newer mtime for the staleness check to see). */
+export function recomposeUserPairs(userId: string) {
+  if (!fs.existsSync(HERMES_HOMES)) return;
+  const profiles = listProfiles();
+  for (const dir of fs.readdirSync(HERMES_HOMES)) {
+    const marker = `__${userId}`;
+    if (dir.endsWith(marker)) {
+      const profile = profiles.find((p) => p.id === dir.slice(0, -marker.length));
+      if (profile) {
+        try {
+          composeUserProfile(profile, userId);
+        } catch {
+          /* recomposed lazily on next chat instead */
+        }
+      }
+    }
+  }
 }
 
 /** Re-compose every existing pair home for a profile (after a golden update). */

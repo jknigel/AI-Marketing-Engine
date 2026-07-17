@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { currentUser, needsBootstrap } from "@/lib/auth";
+import { oidcConfig } from "@/lib/oidc";
 import { createSessionToken, SESSION_COOKIE, sessionCookieOptions } from "@/lib/session";
 import { createUser, findUserByEmail, listUsers, verifyPassword } from "@/lib/store";
 import { audit } from "@/lib/audit";
@@ -51,5 +52,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     user: user ? { id: user.id, email: user.email, name: user.name, role: user.role } : null,
     needsBootstrap: needsBootstrap(),
+    sso: !!oidcConfig(),
   });
 }

@@ -19,6 +19,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     ["/admin/users", "Users"],
     ["/admin/assignments", "Assignments"],
     ["/admin/overlays", "Overlays"],
+    ["/admin/credentials", "Connections"],
     ["/admin/gateways", "Gateways"],
     ["/admin/audit", "Audit"],
     ["/admin/usage", "Usage"],

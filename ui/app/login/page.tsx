@@ -12,15 +12,19 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(params.get("error") === "sso" ? "SSO sign-in failed — try again or use a password" : "");
   const [busy, setBusy] = useState(false);
+  const [sso, setSso] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/login")
       .then((r) => r.json())
       .then((d) => {
         if (d.user) router.replace(next);
-        else setMode(d.needsBootstrap ? "bootstrap" : "login");
+        else {
+          setMode(d.needsBootstrap ? "bootstrap" : "login");
+          setSso(!!d.sso);
+        }
       })
       .catch(() => setMode("login"));
   }, [router, next]);
@@ -91,6 +95,15 @@ function LoginForm() {
         <button type="submit" disabled={busy}>
           {busy ? <span className="spinner" /> : mode === "bootstrap" ? "Create & sign in" : "Sign in"}
         </button>
+        {sso && (
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => (window.location.href = `/api/auth/oidc?next=${encodeURIComponent(next)}`)}
+          >
+            Sign in with SSO
+          </button>
+        )}
       </div>
     </form>
   );
