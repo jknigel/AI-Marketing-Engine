@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
   const byPair = new Map<
     string,
-    { userId: string | null; profileId: string; runs: number; failed: number; durationMs: number; tokens: number; sources: Record<string, number> }
+    { userId: string | null; profileId: string; runs: number; failed: number; durationMs: number; tokens: number; costUsd: number; sources: Record<string, number> }
   >();
   for (const r of records) {
     const key = `${r.userId ?? "(machine)"}::${r.profileId}`;
@@ -28,12 +28,14 @@ export async function GET(req: NextRequest) {
       failed: 0,
       durationMs: 0,
       tokens: 0,
+      costUsd: 0,
       sources: {},
     };
     agg.runs += 1;
     if (!r.ok) agg.failed += 1;
     agg.durationMs += r.durationMs || 0;
     agg.tokens += r.tokens || 0;
+    agg.costUsd += r.costUsd || 0;
     agg.sources[r.source] = (agg.sources[r.source] || 0) + 1;
     byPair.set(key, agg);
   }

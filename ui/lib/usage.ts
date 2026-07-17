@@ -17,6 +17,8 @@ export type UsageRecord = {
   durationMs: number;
   source: "web" | "gateway" | "schedule" | "api";
   tokens?: number;
+  /** hermes' estimated_cost_usd from --usage-file, when reported */
+  costUsd?: number;
 };
 
 const USAGE_DIR = path.join(WORKSPACE, "usage");

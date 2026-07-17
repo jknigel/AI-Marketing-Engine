@@ -29,8 +29,10 @@ export type RunOpts = {
 };
 
 /**
- * Run a task on a profile via Hermes CLI:
- *   HERMES_HOME=<home> hermes chat "<task>"
+ * Run a task on a profile via Hermes CLI in scripted one-shot mode:
+ *   HERMES_HOME=<home> hermes -z "<task>" --usage-file <runs>/<id>.usage.json
+ * (`hermes chat` is interactive-only in current Hermes — a positional prompt
+ * is rejected with "unrecognized arguments"; -z prints just the final reply.)
  * Output is captured to workspace/runs/<runId>.json and returned.
  * Every run is also recorded to workspace/usage/ (JSONL).
  */
@@ -38,6 +40,9 @@ export async function runProfileTask(profileId: string, task: string, opts: RunO
   const { timeoutMs = 10 * 60 * 1000, home = path.join(HERMES_HOMES, profileId), userId = null, source = "api" } = opts;
   const runId = `${profileId}-${Date.now()}`;
   const startedAt = new Date().toISOString();
+  const runsDir = path.join(WORKSPACE, "runs");
+  fs.mkdirSync(runsDir, { recursive: true });
+  const usageFile = path.join(runsDir, `${runId}.usage.json`);
 
   if (!fs.existsSync(home)) {
     const res = fail(runId, profileId, task, startedAt, `Profile '${profileId}' is not materialized. Enable it in the Profile Manager first.`);
@@ -49,7 +54,7 @@ export async function runProfileTask(profileId: string, task: string, opts: RunO
     let buf = "";
     let child;
     try {
-      child = spawn("hermes", ["chat", task], {
+      child = spawn("hermes", ["-z", task, "--usage-file", usageFile], {
         env: { ...process.env, HERMES_HOME: home, HERMES_WORKSPACE: WORKSPACE },
         cwd: WORKSPACE,
       });
@@ -73,6 +78,7 @@ export async function runProfileTask(profileId: string, task: string, opts: RunO
   });
 
   const finishedAt = new Date().toISOString();
+  const hermesUsage = readHermesUsageFile(usageFile);
   const res: RunResult = {
     runId,
     profile: profileId,
@@ -92,13 +98,33 @@ export async function runProfileTask(profileId: string, task: string, opts: RunO
       ok: res.ok,
       durationMs: Date.parse(finishedAt) - Date.parse(startedAt),
       source,
-      tokens: parseTokens(output.text),
+      tokens: hermesUsage.tokens ?? parseTokens(output.text),
+      costUsd: hermesUsage.costUsd,
     });
   } catch {
     /* usage tracking must never break a run */
   }
   audit(`run ${res.ok ? "ok" : "FAILED"} profile=${profileId} runId=${runId} task="${task.slice(0, 120)}"`, userId ?? undefined);
   return res;
+}
+
+/**
+ * Tokens + cost from hermes' --usage-file (verified flat schema:
+ * input_tokens/output_tokens/total_tokens/estimated_cost_usd, values null on
+ * failed runs). Returns undefineds when absent/unreadable — best-effort only.
+ */
+function readHermesUsageFile(file: string): { tokens?: number; costUsd?: number } {
+  try {
+    if (!fs.existsSync(file)) return {};
+    const data = JSON.parse(fs.readFileSync(file, "utf8"));
+    const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+    const inOut = num(data.input_tokens) + num(data.output_tokens);
+    const tokens = inOut > 0 ? inOut : num(data.total_tokens);
+    const costUsd = num(data.estimated_cost_usd);
+    return { tokens: tokens > 0 ? tokens : undefined, costUsd: costUsd > 0 ? costUsd : undefined };
+  } catch {
+    return {};
+  }
 }
 
 function fail(runId: string, profile: string, task: string, startedAt: string, msg: string): RunResult {

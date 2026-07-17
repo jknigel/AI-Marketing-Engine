@@ -9,6 +9,7 @@ type Row = {
   failed: number;
   durationMs: number;
   tokens: number;
+  costUsd: number;
   sources: Record<string, number>;
 };
 type User = { id: string; email: string };
@@ -70,6 +71,7 @@ export default function UsagePage() {
             <th>Failed</th>
             <th>Time</th>
             <th>Tokens*</th>
+            <th>Est. cost*</th>
             <th>Sources</th>
           </tr>
         </thead>
@@ -84,6 +86,7 @@ export default function UsagePage() {
               <td>{r.failed ? <span className="badge bad">{r.failed}</span> : "0"}</td>
               <td>{fmtDuration(r.durationMs)}</td>
               <td className="muted">{r.tokens || "—"}</td>
+              <td className="muted">{r.costUsd ? `$${r.costUsd.toFixed(2)}` : "—"}</td>
               <td className="muted small">
                 {Object.entries(r.sources)
                   .map(([k, v]) => `${k}:${v}`)
@@ -93,7 +96,7 @@ export default function UsagePage() {
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={7} className="muted">
+              <td colSpan={8} className="muted">
                 No usage recorded for this month yet.
               </td>
             </tr>
@@ -101,7 +104,8 @@ export default function UsagePage() {
         </tbody>
       </table>
       <p className="muted small">
-        * Token counts are best-effort (parsed from agent output when present); runs and duration are always recorded.
+        * Tokens and estimated cost come from the Hermes per-run usage report when available; runs and duration are
+        always recorded.
       </p>
     </div>
   );
