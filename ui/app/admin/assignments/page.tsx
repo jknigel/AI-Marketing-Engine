@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 type User = { id: string; email: string; name: string; role: string; disabled: boolean };
-type Profile = { id: string; name: string; category: string; tier: string };
+type Profile = { id: string; name: string; category: string; tier: string; enabled: boolean };
 type Assignment = { userId: string; profileId: string; grantedBy: string; grantedAt: string };
 
 export default function AssignmentsPage() {
@@ -22,7 +22,16 @@ export default function AssignmentsPage() {
     ])
       .then(([u, p, a]) => {
         setUsers(u.users || []);
-        setProfiles((p.profiles || []).map((x: any) => ({ id: x.id, name: x.name, category: x.category, tier: x.tier })));
+        // /api/profiles returns a bare array
+        setProfiles(
+          (Array.isArray(p) ? p : []).map((x: any) => ({
+            id: x.id,
+            name: x.name,
+            category: x.category,
+            tier: x.tier,
+            enabled: !!x.enabled,
+          }))
+        );
         setAssignments(a.assignments || []);
       })
       .catch(() => setError("failed to load"));
@@ -83,7 +92,7 @@ export default function AssignmentsPage() {
             <option value="">— profile —</option>
             {profiles.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} ({p.id})
+                {p.name} ({p.id}){p.enabled ? "" : " — disabled in Settings"}
               </option>
             ))}
           </select>

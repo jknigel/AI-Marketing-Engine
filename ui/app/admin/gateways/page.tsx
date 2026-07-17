@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-type PlatformInfo = { id: string; label: string; tokenConfigured: boolean; tokenEnvs: string[]; allowlist: string };
+type PlatformInfo = {
+  id: string;
+  label: string;
+  tokenConfigured: boolean;
+  tokenEnvs: string[];
+  allowlist: string;
+  note?: string;
+};
 type ProfileRow = {
   id: string;
   name: string;
@@ -121,6 +128,11 @@ export default function GatewaysPage() {
                           <span className="muted small">
                             allowlist: {pl.allowlist ? pl.allowlist : "empty — assign users with a platform ID"}
                           </span>
+                        )}
+                        {active && pl.note && (
+                          <div className="small" style={{ color: "var(--warn)", flexBasis: "100%", maxWidth: 520 }}>
+                            {pl.note}
+                          </div>
                         )}
                       </div>
                     );

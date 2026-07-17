@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
           tokenConfigured: pl.tokenEnvs.every((t) => !!resolveTokenEnv(t, p.id)),
           tokenEnvs: pl.tokenEnvs,
           allowlist: allowlistsFor(p.id)[pl.allowlistEnv] || "",
+          note: pl.note || "",
         })),
       };
     });

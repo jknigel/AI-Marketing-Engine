@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { PLATFORM_ID_FIELDS } from "@/lib/platforms";
 
 type User = {
   id: string;
@@ -12,7 +13,19 @@ type User = {
   createdAt: string;
 };
 
-const PLATFORMS = ["slack", "telegram", "lark", "discord", "whatsapp"];
+const PLATFORMS = PLATFORM_ID_FIELDS;
+const PLATFORM_HINTS: Record<string, string> = {
+  slack: "U0123ABCDEF",
+  telegram: "123456789",
+  lark: "open_id (ou_…)",
+  discord: "1234567890123",
+  whatsapp: "15551234567 (no +)",
+  teams: "AAD object ID",
+  signal: "+15551234567",
+  matrix: "@user:server.org",
+  mattermost: "user ID",
+  line: "U-prefixed ID",
+};
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -220,7 +233,7 @@ function EditModal({
             <label>{p} user ID</label>
             <input
               value={platformIds[p] || ""}
-              placeholder={p === "slack" ? "U0123ABCDEF" : p === "telegram" ? "123456789" : ""}
+              placeholder={PLATFORM_HINTS[p] || ""}
               onChange={(e) => setPlatformIds({ ...platformIds, [p]: e.target.value })}
             />
           </div>

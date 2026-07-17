@@ -176,8 +176,11 @@ capabilities granted to them, in isolation.
 - **Connections** — per-user third-party credentials, encrypted at rest. Where a
   user has a connection (their own Resend key, Slack user token…), their runs use
   *their* identity instead of the engine-level key.
-- **Gateways** — enable Slack/Telegram/Discord bots per capability (one bot per
-  capability). Only assigned users' platform IDs get responses.
+- **Gateways** — enable messaging bots per capability (one bot identity per
+  capability): Slack, Telegram, Discord, WhatsApp, Feishu/Lark, Microsoft
+  Teams, Email, Signal, Matrix, Mattermost and LINE are wired; only assigned
+  users get responses. Bot credentials live in `.env` (see the gateway section
+  there), scoped per profile via `<NAME>__<PROFILE_ID>` with a global fallback.
 - **Audit / Usage** — every action tagged with the acting user; monthly per-user,
   per-capability run counts and durations.
 

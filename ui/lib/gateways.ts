@@ -28,18 +28,8 @@ export const GATEWAYS_CONFIG_PATH = path.join(WORKSPACE, "gateways.json");
 export const GATEWAYS_CONTROL_PATH = path.join(WORKSPACE, "gateways-control.json");
 export const GATEWAYS_STATUS_PATH = path.join(WORKSPACE, "gateways-status.json");
 
-/** Platforms wired end-to-end. Extend by adding a row (see DEVELOPMENT_PLAN.md P3). */
-export const PLATFORMS: {
-  id: string;
-  label: string;
-  /** env vars that must be set for the platform to be usable */
-  tokenEnvs: string[];
-  allowlistEnv: string;
-}[] = [
-  { id: "slack", label: "Slack", tokenEnvs: ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN"], allowlistEnv: "SLACK_ALLOWED_USERS" },
-  { id: "telegram", label: "Telegram", tokenEnvs: ["TELEGRAM_BOT_TOKEN"], allowlistEnv: "TELEGRAM_ALLOWED_USERS" },
-  { id: "discord", label: "Discord", tokenEnvs: ["DISCORD_BOT_TOKEN"], allowlistEnv: "DISCORD_ALLOWED_USERS" },
-];
+import { PLATFORMS } from "./platforms";
+export { PLATFORMS };
 
 export type GatewayConfig = { enabled: boolean; platforms: string[] };
 export type GatewaysFile = { profiles: Record<string, GatewayConfig> };
@@ -64,13 +54,16 @@ export function resolveTokenEnv(tokenEnv: string, profileId: string): string {
   return envValue(scoped) || envValue(tokenEnv);
 }
 
-/** Platform IDs of all users assigned to a profile, per platform. */
+/** Allowlist env values for all users assigned to a profile, per platform. */
 export function allowlistsFor(profileId: string): Record<string, string> {
   const assignedUserIds = new Set(listAssignments().filter((a) => a.profileId === profileId).map((a) => a.userId));
   const users = listUsers().filter((u) => assignedUserIds.has(u.id) && !u.disabled);
   const out: Record<string, string> = {};
   for (const platform of PLATFORMS) {
-    const ids = users.map((u) => u.platformIds?.[platform.id]).filter(Boolean);
+    const ids =
+      platform.allowlistFrom === "email"
+        ? users.map((u) => u.email).filter(Boolean)
+        : users.map((u) => u.platformIds?.[platform.id]).filter(Boolean);
     if (ids.length) out[platform.allowlistEnv] = [...new Set(ids)].join(",");
   }
   return out;
@@ -97,6 +90,11 @@ export function desiredGateways(): GatewayDesired[] {
       const tokens = platform.tokenEnvs.map((t) => ({ name: t, value: resolveTokenEnv(t, profileId) }));
       if (tokens.some((t) => !t.value)) continue; // platform not configured — skip, UI shows why
       for (const t of tokens) env[t.name] = t.value;
+      for (const opt of platform.optionalEnvs ?? []) {
+        const v = resolveTokenEnv(opt, profileId);
+        if (v) env[opt] = v;
+      }
+      Object.assign(env, platform.fixedEnv ?? {});
       activePlatforms.push(pid);
     }
     if (!activePlatforms.length) continue;
