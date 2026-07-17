@@ -198,6 +198,22 @@ with zero manual steps.
     `.profile.md` or the user's preferences; bulk-recompose after golden
     re-materialization in `/api/setup`.
 
+### D1b — Output isolation (added after live testing, 2026-07-18)
+
+Memory isolation alone is not enough: profile rules instruct agents to write
+deliverables to shared `workspace/...` paths, so two users on one capability
+overwrote each other's artifacts. User sessions now run with **cwd = the
+user's private output dir** (`workspace/users/<uid>/outputs`) — relative
+writes are isolated by construction — and the composed SOUL gains a binding
+"Multi-user session context" section remapping shared paths to
+`$ENGINE_SHARED_WORKSPACE` as **read-only** ("changing shared assets requires
+an admin run from the dashboard"). Pair homes carry a `.compose-version`
+marker so composition-logic changes force recomposition of existing homes.
+*Known limitation:* this is cwd + instruction-level enforcement, not an OS
+jail — an agent can still write absolute shared paths if it disobeys its SOUL.
+Hardening candidate (P6): run user sessions with the shared workspace mounted
+read-only (per-run container/namespace).
+
 ### D2 — Web chat routing
 
 `POST /api/chat`: signed session cookie → `requireUser()` → assignment check

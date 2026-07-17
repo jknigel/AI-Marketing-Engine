@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser, isErrorResponse, forbidden } from "@/lib/auth";
 import { isAssigned, assignmentsForUser } from "@/lib/store";
-import { ensureComposed } from "@/lib/compose";
+import { ensureComposed, userWorkDir } from "@/lib/compose";
 import { runProfileTask } from "@/lib/hermes";
 import { listProfiles, readConfig } from "@/lib/profiles";
 
@@ -44,6 +44,13 @@ export async function POST(req: NextRequest) {
   const home = ensureComposed(profileId, user.id);
   if (!home) return NextResponse.json({ error: "unknown profile" }, { status: 404 });
 
-  const result = await runProfileTask(profileId, message, { home, userId: user.id, source: "web" });
+  // cwd = the user's private output dir: relative file writes are isolated by
+  // construction, and the composed SOUL remaps shared paths to read-only.
+  const result = await runProfileTask(profileId, message, {
+    home,
+    userId: user.id,
+    source: "web",
+    cwd: userWorkDir(user.id),
+  });
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });
 }

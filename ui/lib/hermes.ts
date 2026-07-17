@@ -26,6 +26,12 @@ export type RunOpts = {
   /** Acting user (tags audit + usage); null/absent = machine callers. */
   userId?: string | null;
   source?: UsageRecord["source"];
+  /**
+   * Working directory for the run. Default: the SHARED workspace (department
+   * surface — dashboard, scheduled runs). User chat passes the user's PRIVATE
+   * output dir so relative writes are isolated by construction.
+   */
+  cwd?: string;
 };
 
 /**
@@ -37,7 +43,7 @@ export type RunOpts = {
  * Every run is also recorded to workspace/usage/ (JSONL).
  */
 export async function runProfileTask(profileId: string, task: string, opts: RunOpts = {}): Promise<RunResult> {
-  const { timeoutMs = 10 * 60 * 1000, home = path.join(HERMES_HOMES, profileId), userId = null, source = "api" } = opts;
+  const { timeoutMs = 10 * 60 * 1000, home = path.join(HERMES_HOMES, profileId), userId = null, source = "api", cwd = WORKSPACE } = opts;
   const runId = `${profileId}-${Date.now()}`;
   const startedAt = new Date().toISOString();
   const runsDir = path.join(WORKSPACE, "runs");
@@ -55,8 +61,8 @@ export async function runProfileTask(profileId: string, task: string, opts: RunO
     let child;
     try {
       child = spawn("hermes", ["-z", task, "--usage-file", usageFile], {
-        env: { ...process.env, HERMES_HOME: home, HERMES_WORKSPACE: WORKSPACE },
-        cwd: WORKSPACE,
+        env: { ...process.env, HERMES_HOME: home, HERMES_WORKSPACE: cwd },
+        cwd,
       });
     } catch (e: any) {
       return resolve({ ok: false, text: `failed to spawn hermes: ${e.message}` });
